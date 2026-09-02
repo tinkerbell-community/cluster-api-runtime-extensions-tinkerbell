@@ -570,8 +570,12 @@ the CAPI CRDs remains an option for the M4 hardware-validation milestone.)
 
 - Halt semantics on the fleet's SBC hardware: does `Reset` with `Reboot: false` reliably halt Pi-class
   boards, or does firmware auto-restart on some of them (re-opening a small netboot window before
-  CAPT's power-off)? M4 hardware validation decides whether to keep `reboot=false` or pair it with an
-  earlier rufio interlock recommendation.
+  CAPT's power-off)? **Validated live 2026-09-02** on a Raspberry Pi 5: the reset acknowledged, wiped
+  STATE+EPHEMERAL, and halted; CAPT's rufio power-off then completed normally. `reboot=false` stands.
+  (Separate finding from the same test: the provisioning *workflow's* waitdaemon `reboot` action is a
+  silent no-op on the Pi 5 — the node stays in HookOS after workflow success until power-cycled; that
+  is a CAPT-template/HookOS issue, tracked as a P5-adjacent cross-repo note, and a `sysrq-b` action is
+  a working substitute.)
 - Single-CP topology: should the healthy-peer candidate set be extended with the endpoints already
   listed inside the `<cluster>-talosconfig` itself (which could reach the terraform bootstrap node) so
   the `replicas: 1` case gets etcd membership removal instead of the guaranteed `orphaned` path?

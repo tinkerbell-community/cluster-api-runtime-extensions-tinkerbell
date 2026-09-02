@@ -159,3 +159,47 @@ func TestCredentialCacheGCKeepsOrphanWithMachines(t *testing.T) {
 		t.Errorf("cache with live qualifying machines must survive GC: %v", err)
 	}
 }
+
+func TestCredentialCacheEnsureSkipsResourceVersionChurn(t *testing.T) {
+	// CABPT rewrites the source secret on effectively every reconcile
+	// without changing the credentials; the cache must not follow that
+	// churn (observed live as a write-per-reconcile hot path).
+	ctx := context.Background()
+	cache, c := newCache(t, talosconfigSecret())
+
+	created, err := cache.Ensure(ctx, clusterKey())
+	if err != nil || !created {
+		t.Fatalf("first Ensure: created=%v err=%v", created, err)
+	}
+
+	// Bump the source's resourceVersion with identical data.
+	var source corev1.Secret
+	if err := c.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: clusterName + "-talosconfig"}, &source); err != nil {
+		t.Fatal(err)
+	}
+	if source.Labels == nil {
+		source.Labels = map[string]string{}
+	}
+	source.Labels["churn"] = "1"
+	if err := c.Update(ctx, &source); err != nil {
+		t.Fatal(err)
+	}
+
+	var cached corev1.Secret
+	cachedKey := client.ObjectKey{Namespace: ownNamespace, Name: "talosconfig-tinkerbell-talos"}
+	if err := c.Get(ctx, cachedKey, &cached); err != nil {
+		t.Fatal(err)
+	}
+	before := cached.ResourceVersion
+
+	created, err = cache.Ensure(ctx, clusterKey())
+	if err != nil || created {
+		t.Fatalf("churn Ensure: created=%v err=%v", created, err)
+	}
+	if err := c.Get(ctx, cachedKey, &cached); err != nil {
+		t.Fatal(err)
+	}
+	if cached.ResourceVersion != before {
+		t.Error("cache rewritten on source resourceVersion churn with unchanged data")
+	}
+}

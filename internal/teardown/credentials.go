@@ -1,6 +1,7 @@
 package teardown
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -44,8 +45,9 @@ func cachedSecretName(cluster client.ObjectKey) string {
 }
 
 // Ensure refreshes the cached copy from the live secret when the source
-// exists and changed, reporting whether it wrote. A missing source is not
-// an error — the cache keeps whatever it has.
+// exists and its material changed, reporting whether it CREATED the cache
+// (refreshes are routine and not event-worthy). A missing source is not an
+// error — the cache keeps whatever it has.
 func (c *CredentialCache) Ensure(ctx context.Context, cluster client.ObjectKey) (bool, error) {
 	var source corev1.Secret
 	if err := c.Get(ctx, sourceSecretName(cluster), &source); err != nil {
@@ -80,9 +82,20 @@ func (c *CredentialCache) Ensure(ctx context.Context, cluster client.ObjectKey) 
 		return false, err
 	case existing.Annotations[sourceVersionAnnotation] == source.ResourceVersion:
 		return false, nil
+	case bytes.Equal(existing.Data[talosconfigKey], source.Data[talosconfigKey]):
+		// CABPT rewrites the source secret on effectively every reconcile
+		// (endpoint refresh), churning its resourceVersion without changing
+		// the credentials — observed live as a write-per-reconcile hot
+		// path. Only re-copy when the material actually changed.
+		return false, nil
 	}
 	cached.ResourceVersion = existing.ResourceVersion
-	return true, c.Update(ctx, cached, client.FieldOwner(Name))
+	if err := c.Update(ctx, cached, client.FieldOwner(Name)); err != nil {
+		return false, err
+	}
+	// A refresh is routine (endpoints move with machines); only the first
+	// copy is event-worthy.
+	return false, nil
 }
 
 // Config returns the cluster's Talos client configuration, preferring the
