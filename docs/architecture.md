@@ -375,6 +375,14 @@ deadlock**, while a precondition is unmet. Each entry names its owner and its de
 - **Change:** today the provisioned short-circuit returns before schematic resolution (CAPT
   `controller/machine/scope.go:196-221`), freezing `status.installerImage` at the
   provisioning-time version forever.
+- **Confirmed live 2026-09-02:** after P1 landed (`talosVersion=v1.13.9` reaches the TalosConfig,
+  verified on the wire), a CP-rollout replacement still came up with `status.{schematicID,
+  installerImage,diskImageURL}` all `null`. Root cause traced to exactly this gate: the replacement
+  claimed hardware still carrying `v1alpha1.tinkerbell.org/provisioned=true` from its prior claim,
+  so `reconcile` took the provisioned short-circuit and never called `reconcileSchematic`. The node
+  provisioned fine anyway (the workflow template still composes `IMG_URL` from terraform-written OS
+  metadata — P2/P7 not yet done), so only the upgrade path is affected, exactly as predicted. P1 is
+  necessary but **not sufficient**; the trio stays empty until P3 lands.
 - **Without P3:** an in-place `talosVersion` bump injects the stale installer image; CABPT's
   `needsUpgrade` compares that stale tag against the running version, finds them equal, and never
   calls the Upgrade API — **OS upgrades are broken end-to-end**, while the machine is wrongly
