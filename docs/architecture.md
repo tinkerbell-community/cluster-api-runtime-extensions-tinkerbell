@@ -382,7 +382,19 @@ deadlock**, while a precondition is unmet. Each entry names its owner and its de
   so `reconcile` took the provisioned short-circuit and never called `reconcileSchematic`. The node
   provisioned fine anyway (the workflow template still composes `IMG_URL` from terraform-written OS
   metadata — P2/P7 not yet done), so only the upgrade path is affected, exactly as predicted. P1 is
-  necessary but **not sufficient**; the trio stays empty until P3 lands.
+  necessary but **not sufficient**; the trio stays empty until P3 lands. A second live rollout
+  confirmed the trio is `null` even on a genuinely fresh (never-provisioned) machine that has
+  `talosVersion=v1.13.9` on its bootstrap ref — so the deployed v0.7.2 skips resolution on the fresh
+  path too (the binary contains the feature and reads correct data; the skip is almost certainly the
+  bootstrap `talosVersion` not being readable at the single pre-workflow reconcile).
+- **Fix implemented 2026-09-02:** `cluster-api-provider-tinkerbell` branch
+  `p3-resolve-schematic-for-provisioned` (commit 7dae170) hoists `reconcileSchematic` above the
+  provisioned short-circuit so it runs on **every** reconcile — keeping `status.installerImage`
+  current for running nodes and making resolution resilient to the pre-workflow timing skip. Unit
+  tested (`controller/machine/schematic_test.go`). **Not yet deployed:** the nodes are arm64 and the
+  CRDs use webhook conversion (`failurePolicy: Fail`), so running the patched controller locally
+  would break TinkerbellMachine conversion; the fix must ship as a rebuilt arm64 image and a push to
+  a cluster-pullable registry is pending credentials. A ready arm64 binary is built.
 - **Without P3:** an in-place `talosVersion` bump injects the stale installer image; CABPT's
   `needsUpgrade` compares that stale tag against the running version, finds them equal, and never
   calls the Upgrade API — **OS upgrades are broken end-to-end**, while the machine is wrongly
