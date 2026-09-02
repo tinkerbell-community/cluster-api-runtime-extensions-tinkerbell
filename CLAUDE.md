@@ -8,6 +8,9 @@ the original mDNS BMC discovery controller, which stays as-is apart from the C0 
 The full design lives under `docs/`. Read [docs/architecture.md](docs/architecture.md) first — it is the
 binding system contract (governing facts, ownership matrix, preconditions, naming standard). Each
 component has an implementation-grade design doc listed below. Design date: 2026-09-01.
+[docs/caren-analysis.md](docs/caren-analysis.md) is a verified deep analysis of CAREN (the canonical
+multi-provider CAPI runtime-extension repo): patterns to adopt now, the blueprint for any future
+ClusterClass adoption, and an explicit do-not-copy list.
 
 ## The mechanism reality (read before assuming Runtime SDK hooks)
 

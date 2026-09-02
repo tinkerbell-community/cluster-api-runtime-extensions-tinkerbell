@@ -605,6 +605,10 @@ Shared across components (each component doc specifies its own cases against thi
   (KCP uses it there too); C1 and C4 — Hardware is never part of a Cluster topology. Adoption is a
   platform decision with terraform-refactoring costs; nothing in this repo depends on it, and the
   repo must keep working without it indefinitely (upstream #11491 has no non-topology path).
+  A verified blueprint for that future — variable schemas from embedded CRDs, versioned handler
+  names, one aggregated handler per hook, the shared runtime/webhook listener, and a
+  do-not-copy list — lives in [caren-analysis.md](caren-analysis.md), a deep source analysis of
+  the canonical multi-provider runtime-extension repo (CAREN).
 - **CACPPT fold-in of C5.** The upgrade coordinator shadows the control-plane provider's domain;
   once its convergence-gate semantics (including the bootstrap-node blind spot) are proven in
   production, the natural home for the manifest-sync phase is CACPPT itself. C5 is kept separate
