@@ -99,7 +99,7 @@ Apply — see Design), with field owner `tinkerbell-hardware-janitor` recorded i
 | --- | --- | --- |
 | `Hardware.spec.userData` | set to `nil` | released state only |
 | `Hardware.spec.metadata.instance.operating_system` | set to `nil` | released state only; gated by `--clear-os-metadata` |
-| `Hardware.spec.metadata.instance.state` | set to `""` | released state only |
+| `Hardware.spec.metadata.instance.state` | set to `""` | released state only; gated by `--clear-os-metadata` (as implemented — it travels with the OS-metadata clear) |
 | `Hardware.spec.interfaces[].netboot.allowPXE` | set to `false` (baseline) on interfaces that already carry a `netboot` block | released state only; gated by `--baseline-allow-pxe` |
 | `Hardware.metadata.annotations` | `janitor.tinkerbell.org/scrubbed-at=<RFC3339>` | audit stamp, same update |
 
@@ -328,7 +328,7 @@ Replayed events and resyncs hit step 3's `changed == false` short-circuit. The
 | C3 skipped | force-delete, C3 down, pre-C3 machines | C4 alone provides the hardware-hygiene half; the dirty disk residual is covered by the next provision's `install.wipe`. If CAPT's release itself never ran (finalizers force-removed by hand), the predicate cannot match — the runbook step is to mirror `releaseHardware` manually (remove both owner labels and the provisioned annotation), after which C4 does the rest. |
 | C2 `talos-os-metadata` | handoff | State-disjoint: C2 writes `operating_system` only for claimed hardware; C4 clears it only when released. No shared state, no write fight. The clear is what makes C2's staleness check trivial (absent vs. present, never stale-but-plausible). C4's `Update` removes C2's `managedFields` entry for the cleared fields; C2 re-applies fresh on the next claim. |
 | C0 discovery controller | coexistence | Post-C0, discovery's SSA apply asserts only its own fields (`bmcRef`, `agentID`, interface MAC/hostname/dhcp, disks, manufacturer/facility) — none of which C4 writes, and discovery asserts none of what C4 clears. The janitor must never clear discovery-owned fields; its mutate-in-place scrub guarantees that structurally. Pre-C0 hazards: see Failure modes. |
-| tink workflow controller | `allowPXE` ownership | Owns `allowPXE` during a workflow's lifecycle (`PREPARING` true, `POST` false). C4 asserts the parked posture exactly once, in released state, where no CAPT workflow can exist (CAPT deletes the Workflow before releasing). Residual overlap: an auto-enrollment Workflow could theoretically target hardware in C4's released window; worst case is one 409 on either side, resolved by retry, after which C4 is extinct for that object. |
+| tink workflow controller | `allowPXE` ownership | Owns `allowPXE` during a workflow's lifecycle (`PREPARING` true, `POST` false). C4 asserts the parked posture exactly once, in released state, where no CAPT workflow can exist (CAPT deletes the Workflow before releasing). Residual overlap: an auto-enrollment Workflow could theoretically target hardware in C4's released window. Both sides converge on conflicts (tink re-reads and retries; C4 re-classifies), but a scrub landing after the workflow's one-shot netboot toggle (`toggledTrue` guard) parks `allowPXE=false` under it and strands that one enrollment Workflow until timeout — a seconds-wide window requiring an agent to netboot released hardware inside it; the next enrollment attempt succeeds (C4 is extinct for the object by then). Accepted residual. |
 | CAPT | producer | CAPT is both the claimer (writes `userData`, `hardware.go:169-185`) and the releaser (`hardware.go:347-365`); C4 is purely reactive to the release and touches nothing CAPT still owns. |
 | terraform | bootstrap node, P4 | The bootstrap node is protected by two conjuncts (walked above). For terraform-created but CAPI-managed Hardware, C4's OS-metadata clear is durable only once P4 (`ignore_changes`) lands; before that, a `terraform apply` re-asserts the OS object — visible drift, not a correctness hazard. |
 
@@ -372,10 +372,17 @@ rules:
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["create", "patch"]
+  - apiGroups: ["events.k8s.io"]
+    resources: ["events"]
+    verbs: ["create", "patch"]
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
     verbs: ["get", "create", "update"]
 ```
+
+(As implemented: the `events.k8s.io` rule exists because the controller uses the structured events
+recorder, whose sink creates `events.k8s.io/v1` Events; the lease verbs are exactly what client-go's
+`LeaseLock` needs.)
 
 No `patch` on `hardware` (the component never patches), no secrets, no `bmc.tinkerbell.org`, no
 `cluster.x-k8s.io`.
@@ -398,14 +405,14 @@ Flags and values:
 
 | Flag | Value key | Default | Meaning |
 | --- | --- | --- | --- |
-| `--namespace` | `namespace` | release namespace | namespace watched for `Hardware` |
-| `--clear-os-metadata` | `clearOsMetadata` | `true` | clear `operating_system` + `instance.state` on scrub |
-| `--baseline-allow-pxe` | `baselineAllowPxe` | `false` | parked `allowPXE` value asserted on scrub |
-| `--resync-period` | `resyncPeriod` | `1h` | informer resync; bounds the catch-up window for missed events |
-| `--leader-elect` | `leaderElect` | `true` | leader election ID `tinkerbell-hardware-janitor.janitor.tinkerbell.org` |
-| `--metrics-bind-address` | `metricsBindAddress` | `:8080` | Prometheus metrics |
-| `--health-probe-bind-address` | `healthProbeBindAddress` | `:8081` | probes |
-| `--log-level`, `--log-format` | `logLevel`, `logFormat` | `info`, `json` | slog factory (`internal/logging`) |
+| `--namespace` | `janitor.namespace` | flag: `tinkerbell`; chart passes the release namespace when unset | namespace watched for `Hardware` |
+| `--clear-os-metadata` | `janitor.clearOsMetadata` | `true` | clear `operating_system` + `instance.state` on scrub |
+| `--baseline-allow-pxe` | `janitor.baselineAllowPxe` | `false` | parked `allowPXE` value asserted on scrub |
+| `--resync-period` | `janitor.resyncPeriod` | `1h` | informer resync; bounds the catch-up window for missed events |
+| `--leader-elect` | `leaderElection` | `true` | leader election ID `tinkerbell-hardware-janitor.janitor.tinkerbell.org` |
+| `--metrics-bind-address` | (not exposed; container ports fixed at 8080/8081) | `:8080` | Prometheus metrics |
+| `--health-probe-bind-address` | (not exposed) | `:8081` | probes |
+| `--log-level`, `--log-format` | `logging.level`, `logging.format` | `info`, `json` | slog factory (`internal/logging`) |
 
 ## Implementation plan
 
@@ -456,7 +463,7 @@ func Scrub(hw *tinkv1.Hardware, opts Options) (changed bool)
 // internal/janitor/reconciler.go
 type Reconciler struct {
     client.Client
-    Recorder record.EventRecorder
+    Recorder events.EventRecorder // structured events API (k8s.io/client-go/tools/events)
     Opts     Options
 }
 
@@ -483,7 +490,8 @@ mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 ```
 
 Metrics: `janitor_hardware_scrubbed_total` (counter), `janitor_update_conflicts_total` (counter),
-`janitor_half_released_hardware` (gauge).
+`janitor_half_released_hardware` (gauge, labeled `{namespace, hardware}` — set to 1 while an object
+is in the anomaly state and deleted when it leaves it, so the sum is the live count).
 
 Milestones:
 

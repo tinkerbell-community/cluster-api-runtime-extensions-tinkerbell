@@ -1,0 +1,9 @@
+apiVersion: v2
+name: tinkerbell-hardware-janitor
+description: Restores released Tinkerbell Hardware to a clean baseline - clears the secret-bearing userData tootles keeps serving, clears stale OS metadata, and parks the netboot posture.
+type: application
+version: 0.1.0
+appVersion: "0.1.12"
+home: https://github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller
+sources:
+  - https://github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller
