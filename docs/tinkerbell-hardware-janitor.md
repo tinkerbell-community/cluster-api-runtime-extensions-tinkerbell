@@ -24,7 +24,7 @@ claimed hardware, never-claimed inventory, or the terraform-managed bootstrap no
 
 Out of scope: everything on claimed hardware, BMC or power actions, disk wipe (C3's Talos reset
 plus the next provision's `install.wipe` cover it), C1's classification labels, and deleting any
-Kubernetes object. Cross-component contracts, the ownership matrix, and preconditions P1–P7 live in
+Kubernetes object. Cross-component contracts, the ownership matrix, and preconditions P1–P8 live in
 `docs/architecture.md`; this doc covers only C4.
 
 ## Context

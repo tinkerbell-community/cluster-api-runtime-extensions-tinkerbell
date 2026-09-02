@@ -10,7 +10,7 @@ released hardware, and the cluster-scoped remainder of `talosctl upgrade-k8s`. T
 system-level contract all component docs point to: it records the governing facts, the mechanism
 decision (why this repo uses machine deletion phase hooks, plain controllers, and admission
 webhooks instead of the CAPI Runtime SDK hooks the original brief assumed), the field-ownership
-matrix, the environment preconditions P1–P7, the naming standard, and the shared deployment and
+matrix, the environment preconditions P1–P8, the naming standard, and the shared deployment and
 testing strategy.
 
 ## Overview
@@ -325,7 +325,7 @@ Rules that follow from the matrix:
   CAPI deletion hook annotation) keep their foreign domains; everything a component invents lives
   under its own `<function>.tinkerbell.org` domain (see Naming standard).
 
-## Preconditions P1-P7
+## Preconditions P1-P8
 
 These are hard environment prerequisites and required cross-repo changes discovered by the
 critique panel. Components are designed to **degrade visibly (conditions and events), never
@@ -444,6 +444,32 @@ deadlock**, while a precondition is unmet. Each entry names its owner and its de
 > responsibility (pinned per Talos minor there), removes the template's URL-reconstruction logic,
 > and demotes C2's Hardware OS metadata to what it should be: an ecosystem-compat guarantee for
 > tootles and human inspection, not the install path's source of truth.
+
+### P8 — BMC power actions must use forced variants (documented invariant)
+
+- **Owner:** every author of rufio `Job`/`Task` power actions (controllers, templates, runbooks,
+  operators).
+- **Fact:** while Talos is running, only *forced* BMC actions actually take effect on this fleet.
+  The KVM-class BMCs accept all five Redfish ResetTypes (verified live 2026-09-02 on both fleet
+  BMCs), but `GracefulShutdown` is a power-button/ACPI emulation that Talos-on-Pi ignores (no ACPI
+  on the platform), and the devices' `PowerCycle` ResetType implementation is unvalidated. The
+  rufio action → Redfish wire mapping (bmclib `internal/redfishwrapper/power.go:21-28`) is
+  non-obvious — note the `cycle`/`reset` inversion:
+
+  | rufio `powerAction` | Redfish ResetType | Effective under running Talos |
+  | --- | --- | --- |
+  | `on` | `On` | yes |
+  | `off` | **`ForceOff`** | **yes — the forced power-off** |
+  | `cycle` | **`ForceRestart`** | **yes — the forced reload** |
+  | `soft` | `GracefulShutdown` | **no — silent no-op** |
+  | `reset` | `PowerCycle` | unvalidated — do not use |
+
+- **Invariant:** use only `on`, `off`, and `cycle`. Never `soft` or `reset`. Audited 2026-09-02:
+  every automated producer already complies — CAPT machine delete and in-place recovery issue
+  `off`(+`on`) (`controller/machine/bmc.go:28`, `inplace_recovery.go:127-128`), and the tink
+  workflow controller's netboot/isoboot PREPARING jobs issue `off` → boot-device → `on`
+  (`tink/controller/internal/workflow/pre.go:59-70`). The invariant guards manual runbook jobs
+  and future code.
 
 ## Component roster
 

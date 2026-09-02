@@ -37,8 +37,10 @@ are implemented in the core Machine controller with no topology or feature-gate 
 is unoccupied — CAPT greps clean for any deletion-hook annotation — and ordering is proven: CAPT teardown
 begins only at `TinkerbellMachine.deletionTimestamp`, which CAPI sets strictly after all pre-terminate
 hooks clear (F4). Preconditions that apply: P6 (hostname == hardware name convention, which the
-hostname-to-etcd-member matching leans on) and P5 (the CACPPT `leaveErr` bug, which shapes the etcd
-design below). See docs/architecture.md for the governing facts, ownership matrix, and preconditions.
+hostname-to-etcd-member matching leans on), P5 (the CACPPT `leaveErr` bug, which shapes the etcd
+design below), and P8 (BMC power actions must use forced variants — CAPT's post-release
+`PowerHardOff` job maps to Redfish `ForceOff`, which works regardless of node state; C3's own
+reset-halt means the node is usually already down when it fires). See docs/architecture.md for the governing facts, ownership matrix, and preconditions.
 
 ## Contracts
 
