@@ -383,18 +383,27 @@ deadlock**, while a precondition is unmet. Each entry names its owner and its de
   provisioned fine anyway (the workflow template still composes `IMG_URL` from terraform-written OS
   metadata — P2/P7 not yet done), so only the upgrade path is affected, exactly as predicted. P1 is
   necessary but **not sufficient**; the trio stays empty until P3 lands. A second live rollout
-  confirmed the trio is `null` even on a genuinely fresh (never-provisioned) machine that has
-  `talosVersion=v1.13.9` on its bootstrap ref — so the deployed v0.7.2 skips resolution on the fresh
-  path too (the binary contains the feature and reads correct data; the skip is almost certainly the
-  bootstrap `talosVersion` not being readable at the single pre-workflow reconcile).
-- **Fix implemented 2026-09-02:** `cluster-api-provider-tinkerbell` branch
-  `p3-resolve-schematic-for-provisioned` (commit 7dae170) hoists `reconcileSchematic` above the
-  provisioned short-circuit so it runs on **every** reconcile — keeping `status.installerImage`
-  current for running nodes and making resolution resilient to the pre-workflow timing skip. Unit
-  tested (`controller/machine/schematic_test.go`). **Not yet deployed:** the nodes are arm64 and the
-  CRDs use webhook conversion (`failurePolicy: Fail`), so running the patched controller locally
-  would break TinkerbellMachine conversion; the fix must ship as a rebuilt arm64 image and a push to
-  a cluster-pullable registry is pending credentials. A ready arm64 binary is built.
+  confirmed the trio is `null` even on a genuinely fresh machine that has `talosVersion=v1.13.9` on
+  its bootstrap ref.
+- **True root cause found + RESOLVED 2026-09-02 (deployed, durable):** instrumenting the deployed
+  build revealed the skip was **an RBAC gap, not the short-circuit**: `reconcileSchematic` reads the
+  bootstrap `TalosConfig` (unstructured) for the target Talos version, but CAPT's ClusterRole never
+  granted `get` on `talosconfigs.bootstrap.cluster.x-k8s.io`. Every read failed with `Forbidden`,
+  `talosVersion()` returned `""`, and resolution was silently skipped — for every machine, fresh or
+  provisioned, since the feature shipped. Two fixes went into `cluster-api-provider-tinkerbell`
+  (released as **v0.7.5**): (1) the `+kubebuilder:rbac` marker granting `talosconfigs` read (+
+  regenerated `role.yaml`/`infrastructure-components.yaml`), and (2) the P3 hoist so resolution also
+  keeps a running node's `status.installerImage` current (both unit-tested,
+  `controller/machine/schematic_test.go`). Deployed durably by bumping the cluster-api-operator's
+  CAPT `fetchConfig` to v0.7.5 (terraform `modules/core/.../cluster-api-operator/locals.tf`).
+  **Verified live end-to-end:** both control-plane machines — and a fresh CACPPT-rollout
+  replacement, resolving from `PREPARING` onward — now carry
+  `status.installerImage = factory.talos.dev/metal-installer/00b36099…:v1.13.9`, with zero
+  `Forbidden` errors. CABPT's reader (`controllers/installer_image.go`, `status.installerImage` at
+  `v1beta2`) matches this contract, so an in-place `talosVersion` bump now feeds the correct installer
+  to the upgrade path. (Initial provisioning correctly still uses the raw `diskImageURL`; `install.image`
+  is an upgrade-time injection — a fresh node's config showing `install.disk` without `install.image`
+  is expected, not a gap.)
 - **Without P3:** an in-place `talosVersion` bump injects the stale installer image; CABPT's
   `needsUpgrade` compares that stale tag against the running version, finds them equal, and never
   calls the Upgrade API — **OS upgrades are broken end-to-end**, while the machine is wrongly
