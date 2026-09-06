@@ -17,6 +17,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -48,6 +49,9 @@ type Reconciler struct {
 	Sync        func(ctx context.Context, cosi state.State, restCfg *rest.Config, talosVersion semver.Version, o SyncOptions) (SyncReport, error)
 
 	Opts Options
+
+	// Nudges, when set, feeds lifecycle-hook reconcile requests (SP-10).
+	Nudges chan event.GenericEvent
 }
 
 // Reconcile implements the flow of docs/talos-upgrade-coordinator.md §Reconcile flow.

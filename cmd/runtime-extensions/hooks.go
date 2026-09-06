@@ -8,6 +8,7 @@ import (
 
 	runtimehooksv1 "sigs.k8s.io/cluster-api/api/runtime/hooks/v1alpha1"
 
+	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/pkg/handlers/lifecycle"
 	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/pkg/handlers/talos"
 )
 
@@ -18,6 +19,12 @@ func runtimeCatalog() *runtimecatalog.Catalog {
 	return catalog
 }
 
+// hookDeps carries the runtime-hook handlers that need manager-backed wiring.
+type hookDeps struct {
+	// lifecycle, when set, registers the SP-10 upgrade-milestone hooks.
+	lifecycle *lifecycle.Dispatcher
+}
+
 // runtimeExtensionHandlers is the complete, closed list of Runtime SDK
 // handlers this binary registers. THE ONE HARD INVARIANT (spec §2.4): none of
 // them may be an in-place hook — CanUpdateMachine/CanUpdateMachineSet/
@@ -25,8 +32,8 @@ func runtimeCatalog() *runtimecatalog.Catalog {
 // core CAPI hard-fails a second UpdateMachine registration, breaking in-place
 // updates for the whole management cluster. TestNoInPlaceHooksRegistered
 // enforces this at build time; grow this list only through it.
-func runtimeExtensionHandlers() []runtimeserver.ExtensionHandler {
-	return []runtimeserver.ExtensionHandler{
+func runtimeExtensionHandlers(deps hookDeps) []runtimeserver.ExtensionHandler {
+	handlers := []runtimeserver.ExtensionHandler{
 		{
 			Hook:        runtimehooksv1.DiscoverVariables,
 			Name:        talos.DiscoverVariablesHandlerName,
@@ -43,11 +50,26 @@ func runtimeExtensionHandlers() []runtimeserver.ExtensionHandler {
 			HandlerFunc: (&talos.WorkerPatchHandler{}).GeneratePatches,
 		},
 	}
+	if deps.lifecycle != nil {
+		handlers = append(handlers,
+			runtimeserver.ExtensionHandler{
+				Hook:        runtimehooksv1.BeforeClusterUpgrade,
+				Name:        lifecycle.BeforeClusterUpgradeHandlerName,
+				HandlerFunc: deps.lifecycle.BeforeClusterUpgrade,
+			},
+			runtimeserver.ExtensionHandler{
+				Hook:        runtimehooksv1.AfterControlPlaneUpgrade,
+				Name:        lifecycle.AfterControlPlaneUpgradeHandlerName,
+				HandlerFunc: deps.lifecycle.AfterControlPlaneUpgrade,
+			},
+		)
+	}
+	return handlers
 }
 
 // registerRuntimeHooks adds every handler to the runtime server.
-func registerRuntimeHooks(srv *runtimeserver.Server) error {
-	for _, handler := range runtimeExtensionHandlers() {
+func registerRuntimeHooks(srv *runtimeserver.Server, deps hookDeps) error {
+	for _, handler := range runtimeExtensionHandlers(deps) {
 		if err := srv.AddExtensionHandler(handler); err != nil {
 			return fmt.Errorf("registering runtime hook handler %q: %w", handler.Name, err)
 		}

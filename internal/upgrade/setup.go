@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // SetupWithManager wires the coordinator: primary watch on TalosControlPlane
@@ -27,7 +28,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager, concurrency int) error {
 	tcp := &unstructured.Unstructured{}
 	tcp.SetGroupVersionKind(TalosControlPlaneGVK)
 
-	err := ctrl.NewControllerManagedBy(mgr).
+	b := ctrl.NewControllerManagedBy(mgr).
 		Named(Name).
 		For(tcp, builder.WithPredicates(predicate.Or(
 			predicate.GenerationChangedPredicate{},
@@ -35,9 +36,13 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager, concurrency int) error {
 		))).
 		Watches(&clusterv1.Machine{},
 			handler.EnqueueRequestsFromMapFunc(r.machineToTCP),
-			builder.WithPredicates(machineConvergenceChanged())).
-		Complete(r)
-	if err != nil {
+			builder.WithPredicates(machineConvergenceChanged()))
+	if r.Nudges != nil {
+		// Lifecycle-hook nudges (SP-10): topology upgrade milestones enqueue
+		// the TCP directly instead of waiting for the blocked-gate poll.
+		b = b.WatchesRawSource(source.Channel(r.Nudges, &handler.EnqueueRequestForObject{}))
+	}
+	if err := b.Complete(r); err != nil {
 		return fmt.Errorf("building %s controller: %w", Name, err)
 	}
 	_ = concurrency // single TCP per cluster; serialized reconciles are the correctness posture

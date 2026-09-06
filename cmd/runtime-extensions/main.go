@@ -35,6 +35,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -44,6 +45,7 @@ import (
 	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/resolve"
 	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/teardown"
 	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/upgrade"
+	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/pkg/handlers/lifecycle"
 )
 
 // componentName is the provider identity: leader-election ID, handler-name
@@ -197,9 +199,30 @@ func main() {
 }
 
 func run(opts options, gates featuregate.FeatureGate, root, log *slog.Logger) error {
-	mgr, err := buildManager(opts, gates)
+	mgr, runtimeSrv, err := buildManager(opts)
 	if err != nil {
 		return fmt.Errorf("creating manager: %w", err)
+	}
+
+	// Lifecycle nudges (SP-10): topology upgrade milestones enqueue the
+	// coordinator directly. Wired only when both the coordinator and the
+	// runtime hooks are enabled.
+	var nudges chan event.GenericEvent
+	if gates.Enabled(FeatureUpgradeCoordinator) && gates.Enabled(FeatureRuntimeHooks) {
+		nudges = make(chan event.GenericEvent, 16)
+	}
+	if gates.Enabled(FeatureRuntimeHooks) {
+		deps := hookDeps{}
+		if nudges != nil {
+			nudger := &upgrade.Nudger{Client: mgr.GetClient(), Events: nudges}
+			deps.lifecycle = &lifecycle.Dispatcher{
+				OnBeforeClusterUpgrade:     []lifecycle.SubHandler{{Name: "upgrade-coordinator", OnEvent: nudger.NudgeCluster}},
+				OnAfterControlPlaneUpgrade: []lifecycle.SubHandler{{Name: "upgrade-coordinator", OnEvent: nudger.NudgeCluster}},
+			}
+		}
+		if err := registerRuntimeHooks(runtimeSrv, deps); err != nil {
+			return err
+		}
 	}
 
 	setups := []struct {
@@ -211,7 +234,7 @@ func run(opts options, gates featuregate.FeatureGate, root, log *slog.Logger) er
 		{FeatureWorkflowGate, setupWorkflowGate, "workflow-create gate"},
 		{FeatureMachineTeardown, func(m ctrl.Manager) error { return setupTeardown(m, opts, root) }, "talos-machine-teardown"},
 		{FeatureHardwareJanitor, func(m ctrl.Manager) error { return setupJanitor(m, opts) }, "tinkerbell-hardware-janitor"},
-		{FeatureUpgradeCoordinator, func(m ctrl.Manager) error { return setupUpgrade(m, opts) }, "talos-upgrade-coordinator"},
+		{FeatureUpgradeCoordinator, func(m ctrl.Manager) error { return setupUpgrade(m, opts, nudges) }, "talos-upgrade-coordinator"},
 	}
 	for _, s := range setups {
 		if !gates.Enabled(s.gate) {
@@ -294,7 +317,7 @@ func setupJanitor(mgr ctrl.Manager, opts options) error {
 	return reconciler.SetupWithManager(mgr)
 }
 
-func setupUpgrade(mgr ctrl.Manager, opts options) error {
+func setupUpgrade(mgr ctrl.Manager, opts options, nudges chan event.GenericEvent) error {
 	ignore := sets.New[string]()
 	for _, n := range strings.Split(opts.gateIgnoreNodes, ",") {
 		if n = strings.TrimSpace(n); n != "" {
@@ -304,6 +327,7 @@ func setupUpgrade(mgr ctrl.Manager, opts options) error {
 	reconciler := &upgrade.Reconciler{
 		Client:   mgr.GetClient(),
 		Recorder: mgr.GetEventRecorder(upgrade.Name),
+		Nudges:   nudges,
 		NewWorkload: func(kubeconfig []byte) (kubernetes.Interface, *rest.Config, error) {
 			cfg, err := upgrade.WorkloadRESTConfig(kubeconfig)
 			if err != nil {
@@ -350,11 +374,11 @@ func credentialGC(credentials *teardown.CredentialCache, root *slog.Logger) mana
 	})
 }
 
-func buildManager(opts options, gates featuregate.FeatureGate) (ctrl.Manager, error) {
+func buildManager(opts options) (ctrl.Manager, *runtimeserver.Server, error) {
 	scheme := runtime.NewScheme()
 	for _, add := range []func(*runtime.Scheme) error{clientgoscheme.AddToScheme, clusterv1.AddToScheme, tinkv1.AddToScheme} {
 		if err := add(scheme); err != nil {
-			return nil, fmt.Errorf("building scheme: %w", err)
+			return nil, nil, fmt.Errorf("building scheme: %w", err)
 		}
 	}
 
@@ -384,22 +408,22 @@ func buildManager(opts options, gates featuregate.FeatureGate) (ctrl.Manager, er
 	// The CAPI runtime server IS the webhook server (spec §2.2): one process,
 	// one listener, one cert. It hosts the admission webhooks (the workflow
 	// gate registers into its mux via the standard builder) and the Runtime SDK
-	// hooks. Webhook serving is a non-leader-election runnable: every replica
-	// answers, so failurePolicy Fail stays available (spec §2.4).
+	// hooks (registered in run(), after manager-backed wiring exists). Webhook
+	// serving is a non-leader-election runnable: every replica answers, so
+	// failurePolicy Fail stays available (spec §2.4).
 	runtimeSrv, err := runtimeserver.New(runtimeserver.Options{
 		Catalog: runtimeCatalog(),
 		Port:    opts.webhookPort,
 		CertDir: opts.webhookCertDir,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("building runtime server: %w", err)
-	}
-	if gates.Enabled(FeatureRuntimeHooks) {
-		if err := registerRuntimeHooks(runtimeSrv); err != nil {
-			return nil, err
-		}
+		return nil, nil, fmt.Errorf("building runtime server: %w", err)
 	}
 	managerOptions.WebhookServer = runtimeSrv
 
-	return ctrl.NewManager(ctrl.GetConfigOrDie(), managerOptions)
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), managerOptions)
+	if err != nil {
+		return nil, nil, err
+	}
+	return mgr, runtimeSrv, nil
 }

@@ -7,6 +7,8 @@ import (
 	runtimeserver "sigs.k8s.io/cluster-api/exp/runtime/server"
 
 	runtimehooksv1 "sigs.k8s.io/cluster-api/api/runtime/hooks/v1alpha1"
+
+	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/pkg/handlers/lifecycle"
 )
 
 // TestNoInPlaceHooksRegistered is the mandatory build/registration guard of
@@ -21,7 +23,7 @@ func TestNoInPlaceHooksRegistered(t *testing.T) {
 		runtimecatalog.HookName(runtimehooksv1.CanUpdateMachineSet): true,
 		runtimecatalog.HookName(runtimehooksv1.UpdateMachine):       true,
 	}
-	for _, handler := range runtimeExtensionHandlers() {
+	for _, handler := range runtimeExtensionHandlers(hookDeps{lifecycle: &lifecycle.Dispatcher{}}) {
 		name := runtimecatalog.HookName(handler.Hook)
 		if forbidden[name] {
 			t.Fatalf("handler %q registers in-place hook %s — forbidden: the bootstrap provider owns the in-place extension surface", handler.Name, name)
@@ -32,14 +34,14 @@ func TestNoInPlaceHooksRegistered(t *testing.T) {
 // TestRuntimeHandlersRegister asserts every declared handler registers cleanly
 // against the catalog (signature mismatches surface here, not at startup).
 func TestRuntimeHandlersRegister(t *testing.T) {
-	if len(runtimeExtensionHandlers()) == 0 {
+	if len(runtimeExtensionHandlers(hookDeps{lifecycle: &lifecycle.Dispatcher{}})) == 0 {
 		t.Fatal("no runtime handlers declared")
 	}
 	srv, err := runtimeserver.New(runtimeserver.Options{Catalog: runtimeCatalog()})
 	if err != nil {
 		t.Fatalf("building runtime server: %v", err)
 	}
-	if err := registerRuntimeHooks(srv); err != nil {
+	if err := registerRuntimeHooks(srv, hookDeps{lifecycle: &lifecycle.Dispatcher{}}); err != nil {
 		t.Fatalf("registerRuntimeHooks() = %v", err)
 	}
 }
