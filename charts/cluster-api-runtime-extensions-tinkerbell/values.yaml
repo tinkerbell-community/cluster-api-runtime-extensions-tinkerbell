@@ -91,6 +91,29 @@ template:
   # templateRef against (the Hardware/Workflow namespace). Must exist.
   namespace: tinkerbell
 
+clusterClass:
+  # Ship the EKS-style Talos ClusterClass flavor + the ExtensionConfig that
+  # routes topology hooks to this extension. Off by default: enabling requires
+  # the CAPI core manager to run ClusterTopology=true (RuntimeSDK is already on
+  # for in-place) and the fork CRDs (TalosControlPlaneTemplate,
+  # TalosConfigTemplate, TinkerbellMachineTemplate, TinkerbellClusterTemplate)
+  # to be installed. See docs/clusterclass-adoption.md before enabling against
+  # a live cluster.
+  enabled: false
+  name: talos-tinkerbell
+  # Namespace for the ClusterClass and its referenced templates — the
+  # namespace workload Clusters live in.
+  namespace: tinkerbell
+  hardware:
+    # hardwareAffinity required-term matchLabels per role. Add the
+    # classify.tinkerbell.org/classified marker here once the classifier
+    # component manages extension labels, so unclassified hardware is never
+    # claimed and imaged with a wrong schematic.
+    controlPlaneSelector:
+      tinkerbell.org/role: control-plane
+    workerSelector:
+      tinkerbell.org/role: worker
+
 resources:
   requests:
     cpu: 10m

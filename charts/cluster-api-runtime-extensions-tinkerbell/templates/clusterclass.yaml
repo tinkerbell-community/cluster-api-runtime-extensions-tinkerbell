@@ -1,0 +1,142 @@
+{{- if .Values.clusterClass.enabled }}
+{{- /*
+The EKS-style Talos ClusterClass flavor (spec §4.2): optional, never a hard
+dependency — users may bring their own ClusterClass referencing the same
+handler names. templateRef points at the shipped content-addressed
+talos-install Template (§3.6): a body change ships a new Template CR and this
+ref moves with it in the same chart change, so machines mid-provision against
+the old ref still resolve while new machines get the new body.
+*/}}
+{{- $ccName := .Values.clusterClass.name }}
+{{- $ccNS := .Values.clusterClass.namespace }}
+{{- $ext := include "carext.name" . }}
+{{- $installTemplate := printf "talos-install-%s" (.Files.Get "files/talos-install-template.yaml" | sha256sum | trunc 10) }}
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: TinkerbellClusterTemplate
+metadata:
+  name: {{ $ccName }}-cluster
+  namespace: {{ $ccNS }}
+  labels:
+    {{- include "carext.labels" . | nindent 4 }}
+spec:
+  template:
+    spec: {}
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: TalosControlPlaneTemplate
+metadata:
+  name: {{ $ccName }}-control-plane
+  namespace: {{ $ccNS }}
+  labels:
+    {{- include "carext.labels" . | nindent 4 }}
+spec:
+  template:
+    spec:
+      controlPlaneConfig:
+        controlplane:
+          generateType: controlplane
+      # A single-VIP control plane cannot surge (spec §4.2).
+      rolloutStrategy:
+        type: RollingUpdate
+        rollingUpdate:
+          maxSurge: 0
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: TinkerbellMachineTemplate
+metadata:
+  name: {{ $ccName }}-control-plane-machine
+  namespace: {{ $ccNS }}
+  labels:
+    {{- include "carext.labels" . | nindent 4 }}
+spec:
+  template:
+    spec:
+      templateRef:
+        name: {{ $installTemplate }}
+        namespace: {{ .Values.template.namespace }}
+      hardwareAffinity:
+        required:
+          - labelSelector:
+              matchLabels:
+                {{- toYaml .Values.clusterClass.hardware.controlPlaneSelector | nindent 16 }}
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: TalosConfigTemplate
+metadata:
+  name: {{ $ccName }}-worker-bootstrap
+  namespace: {{ $ccNS }}
+  labels:
+    {{- include "carext.labels" . | nindent 4 }}
+spec:
+  template:
+    spec:
+      generateType: worker
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: TinkerbellMachineTemplate
+metadata:
+  name: {{ $ccName }}-worker-machine
+  namespace: {{ $ccNS }}
+  labels:
+    {{- include "carext.labels" . | nindent 4 }}
+spec:
+  template:
+    spec:
+      templateRef:
+        name: {{ $installTemplate }}
+        namespace: {{ .Values.template.namespace }}
+      hardwareAffinity:
+        required:
+          - labelSelector:
+              matchLabels:
+                {{- toYaml .Values.clusterClass.hardware.workerSelector | nindent 16 }}
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: ClusterClass
+metadata:
+  name: {{ $ccName }}
+  namespace: {{ $ccNS }}
+  labels:
+    {{- include "carext.labels" . | nindent 4 }}
+spec:
+  infrastructure:
+    templateRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+      kind: TinkerbellClusterTemplate
+      name: {{ $ccName }}-cluster
+  controlPlane:
+    templateRef:
+      apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+      kind: TalosControlPlaneTemplate
+      name: {{ $ccName }}-control-plane
+    machineInfrastructure:
+      templateRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+        kind: TinkerbellMachineTemplate
+        name: {{ $ccName }}-control-plane-machine
+  workers:
+    machineDeployments:
+      - class: default-worker
+        bootstrap:
+          templateRef:
+            apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+            kind: TalosConfigTemplate
+            name: {{ $ccName }}-worker-bootstrap
+        infrastructure:
+          templateRef:
+            apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+            kind: TinkerbellMachineTemplate
+            name: {{ $ccName }}-worker-machine
+  patches:
+    # Versioned -gp names from day one (spec §4.4): a mutator behavior change
+    # ships as v2 side by side, never as a silent change to v1's output —
+    # patch-output drift folds into the bootstrap provider's in-place config
+    # hash and would roll the fleet.
+    - name: talos-cluster-config
+      external:
+        generatePatchesExtension: talostinkerbellclusterconfigpatchv1-gp.{{ $ext }}
+        discoverVariablesExtension: talostinkerbellclusterconfigvars-dv.{{ $ext }}
+    - name: talos-worker-config
+      external:
+        generatePatchesExtension: talostinkerbellworkerconfigpatchv1-gp.{{ $ext }}
+{{- end }}

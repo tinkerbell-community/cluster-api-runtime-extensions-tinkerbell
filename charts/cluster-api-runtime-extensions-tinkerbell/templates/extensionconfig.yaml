@@ -1,0 +1,23 @@
+{{- if .Values.clusterClass.enabled }}
+{{- /*
+Static helm-templated ExtensionConfig (spec §2.7): no self-registration
+Runnable, no registry warmup — CAPI's native annotation injects the caBundle
+from the cert-manager Secret. Distinctly named from the bootstrap provider's
+in-place ExtensionConfig: multiple ExtensionConfigs are fine; only a second
+UpdateMachine handler is fatal, and this server registers none (guarded).
+*/}}
+apiVersion: runtime.cluster.x-k8s.io/v1beta2
+kind: ExtensionConfig
+metadata:
+  name: {{ include "carext.name" . }}
+  labels:
+    {{- include "carext.labels" . | nindent 4 }}
+  annotations:
+    runtime.cluster.x-k8s.io/inject-ca-from-secret: {{ .Release.Namespace }}/{{ include "carext.name" . }}-serving-cert
+spec:
+  clientConfig:
+    service:
+      name: {{ include "carext.name" . }}
+      namespace: {{ .Release.Namespace }}
+      port: 443
+{{- end }}
