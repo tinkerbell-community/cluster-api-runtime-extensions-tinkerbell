@@ -1,0 +1,24 @@
+{{- if .Values.template.enabled }}
+{{- /*
+The talos-install Workflow Template, moved out of terraform (spec §3.6). The
+body lives in files/ so Helm never interprets the tink workflow-controller's
+own {{ .Hardware.* }} directives, and the CR name is content-addressed: a body
+change ships a NEW Template object, never mutates one in place — Workflows
+render once, so an in-place mutation would silently affect only future
+machines and drift from provisioned ones. Consumers pin the body they were
+provisioned against via templateRef; a ref bump is a deliberate, controlled
+template change. IMG_URL builds entirely from the resolver-written
+Hardware.spec.metadata.instance.operating_system {slug,version,os_slug}.
+*/}}
+{{- $body := .Files.Get "files/talos-install-template.yaml" }}
+apiVersion: tinkerbell.org/v1alpha1
+kind: Template
+metadata:
+  name: talos-install-{{ sha256sum $body | trunc 10 }}
+  namespace: {{ .Values.template.namespace }}
+  labels:
+    {{- include "resolver.labels" . | nindent 4 }}
+spec:
+  data: |
+{{ $body | indent 4 }}
+{{- end }}

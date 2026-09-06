@@ -21,6 +21,40 @@ resolver:
   # Maximum concurrent reconciles.
   concurrency: 4
 
+webhook:
+  # The mandatory Workflow-CREATE gate (runtime-extensions-migration.md §3.7).
+  # It denies a CAPT-labeled Workflow CREATE until the target Hardware's
+  # operating_system block is written, because tink-controller renders a
+  # Workflow exactly once: a render against an empty block builds a broken
+  # IMG_URL and permanently bricks the machine. Default-on and load-bearing;
+  # disable only during bring-up ordering, never as a steady-state posture.
+  enabled: true
+  # Fail is deliberate: with Ignore, an outage of this pod silently voids the
+  # only invariant the gate exists to enforce. The objectSelector keeps the
+  # blast radius to CAPT-created Workflows (auto-enrollment is never blocked).
+  failurePolicy: Fail
+  port: 9443
+  certManager:
+    # issuerRef to sign the serving certificate, e.g.
+    #   issuerRef: {name: my-issuer, kind: ClusterIssuer}
+    # Empty creates a namespace-scoped self-signed Issuer.
+    issuerRef: {}
+
+template:
+  # Ship the talos-install Workflow Template CR with a content-addressed name
+  # (talos-install-<sha256 body | trunc 10>, spec §3.6). Additive in Wave 1:
+  # nothing resolves it until a TinkerbellMachineTemplate names it via
+  # templateRef, so shipping it never disturbs the running cluster.
+  enabled: true
+  # Namespace the Template CR lands in — the namespace CAPT resolves
+  # templateRef against (the Hardware/Workflow namespace). Must exist.
+  namespace: tinkerbell
+
+# Replica count. The webhook serves on every replica (it is not gated by
+# leader election), so >1 keeps admission available under failurePolicy Fail
+# while reconcilers still run only on the leader.
+replicas: 1
+
 leaderElection: true
 
 logging:

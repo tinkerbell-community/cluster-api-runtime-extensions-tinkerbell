@@ -1,0 +1,84 @@
+{{- if .Values.webhook.enabled }}
+{{- if not .Values.webhook.certManager.issuerRef }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "resolver.name" . }}-selfsigned
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "resolver.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+{{- end }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "resolver.name" . }}-serving-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "resolver.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "resolver.name" . }}-serving-cert
+  dnsNames:
+    - {{ include "resolver.name" . }}.{{ .Release.Namespace }}.svc
+    - {{ include "resolver.name" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    {{- if .Values.webhook.certManager.issuerRef }}
+    {{- toYaml .Values.webhook.certManager.issuerRef | nindent 4 }}
+    {{- else }}
+    name: {{ include "resolver.name" . }}-selfsigned
+    kind: Issuer
+    {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "resolver.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "resolver.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "resolver.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: webhook
+      port: 443
+      targetPort: webhook
+      protocol: TCP
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ include "resolver.name" . }}-workflow-gate
+  labels:
+    {{- include "resolver.labels" . | nindent 4 }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "resolver.name" . }}-serving-cert
+webhooks:
+  - name: workflow-gate.resolve.tinkerbell.org
+    clientConfig:
+      service:
+        name: {{ include "resolver.name" . }}
+        namespace: {{ .Release.Namespace }}
+        path: /validate-tinkerbell-org-v1alpha1-workflow
+        port: 443
+    rules:
+      - apiGroups: ["tinkerbell.org"]
+        apiVersions: ["v1alpha1"]
+        resources: ["workflows"]
+        operations: ["CREATE"]
+        scope: Namespaced
+    # CAPT stamps this label on every Workflow it creates; tink auto-enrollment
+    # Workflows are unlabeled, so they are excluded at the API server's matching
+    # layer regardless of failure policy.
+    objectSelector:
+      matchExpressions:
+        - key: capt.tinkerbell.org/machine-name
+          operator: Exists
+    failurePolicy: {{ .Values.webhook.failurePolicy }}
+    matchPolicy: Equivalent
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+    timeoutSeconds: 10
+{{- end }}

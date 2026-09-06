@@ -1,0 +1,68 @@
+version: "0.1"
+name: talos-install-template
+global_timeout: 9800
+tasks:
+  - name: "install-talos"
+    worker: "{{.device_1}}"
+    volumes:
+      - /dev:/dev
+      - /dev/console:/dev/console
+      - /lib/firmware:/lib/firmware:ro
+    actions:
+      # Stream the Factory's raw metal image straight onto the install disk
+      # rather than running `installer install`. The image already carries the
+      # kernel cmdline this cluster needs -- including talos.config -- baked in
+      # by the schematic (modules/data-lookup/modules/images), so there is
+      # nothing to patch afterwards.
+      #
+      # OsSlug is "talos-<version>-<arch>", so the last dash-separated field is
+      # the architecture the Factory names the image after.
+      - name: "Write Talos image"
+        image: quay.io/tinkerbell/actions/image2disk:latest
+        timeout: 9600
+        namespaces:
+          network: host
+        environment:
+          # Single-quoted: the workflow controller runs the Go template over the
+          # raw file text before any YAML parsing, so a YAML \" escape would reach
+          # the template parser as a stray backslash and fail to parse.
+          IMG_URL: 'https://factory.talos.dev/image/{{ .Hardware.Metadata.Instance.OperatingSystem.Slug }}/{{ .Hardware.Metadata.Instance.OperatingSystem.Version }}/metal-{{ .Hardware.Metadata.Instance.OperatingSystem.OsSlug | splitList "-" | last }}.raw.zst'
+          DEST_DISK: "{{ index .Hardware.Disks 0 }}"
+          COMPRESSED: "true"
+          # Factory pulls have been intermittent from this network; retry rather
+          # than failing the whole workflow on a single transport hiccup.
+          RETRY_ENABLED: "true"
+          RETRY_DURATION_MINUTES: "10"
+          TEXT_LOGGING: "true"
+
+      # waitdaemon reports success to tink immediately, then respawns itself
+      # to wait WAIT_SECONDS and finally runs IMAGE with this action's own
+      # inherited config (privileged, pid: host, volumes). On CaptainOS the
+      # runtime is nerdctl (these containerd/nerdctl mounts are the
+      # documented CaptainOS volume set); CONTAINER_RUNTIME is pinned rather
+      # than auto-detected for determinism. The command MUST be
+      # "reboot -f": plain "reboot" only signals PID 1, which CaptainOS's
+      # init ignores — observed live as a silent no-op that left the machine
+      # parked in the OSIE after workflow success (waitdaemon by design
+      # cannot surface that failure). -f invokes the reboot(2) syscall
+      # directly, which the inherited privileges permit.
+      # Both pid fields are set deliberately: namespaces.pid is the current
+      # schema (and takes precedence where supported), while the top-level
+      # pid is the deprecated field older deployed agents honor.
+      - name: "reboot"
+        image: ghcr.io/jacobweinstock/waitdaemon:0.4.3
+        timeout: 90
+        pid: host
+        namespaces:
+          pid: host
+        environment:
+          IMAGE: alpine:3.22
+          WAIT_SECONDS: 10
+          CONTAINER_RUNTIME: nerdctl
+        volumes:
+          - /run/containerd/containerd.sock:/run/containerd/containerd.sock
+          - /var/lib/containerd:/var/lib/containerd
+          - /var/lib/nerdctl:/var/lib/nerdctl
+          - /opt/cni/bin:/opt/cni/bin
+          - /etc/cni/net.d:/etc/cni/net.d
+        command: ["reboot", "-f"]

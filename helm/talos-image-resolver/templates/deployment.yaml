@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "resolver.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
       {{- include "resolver.selectorLabels" . | nindent 6 }}
@@ -35,6 +35,11 @@ spec:
             - --leader-elect={{ .Values.leaderElection }}
             - --log-level={{ .Values.logging.level }}
             - --log-format={{ .Values.logging.format }}
+            - --enable-workflow-gate={{ .Values.webhook.enabled }}
+            {{- if .Values.webhook.enabled }}
+            - --webhook-port={{ .Values.webhook.port }}
+            - --webhook-cert-dir=/tmp/k8s-webhook-server/serving-certs
+            {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -45,6 +50,16 @@ spec:
               containerPort: 8080
             - name: probes
               containerPort: 8081
+            {{- if .Values.webhook.enabled }}
+            - name: webhook
+              containerPort: {{ .Values.webhook.port }}
+            {{- end }}
+          {{- if .Values.webhook.enabled }}
+          volumeMounts:
+            - name: serving-cert
+              mountPath: /tmp/k8s-webhook-server/serving-certs
+              readOnly: true
+          {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -55,3 +70,9 @@ spec:
               port: probes
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+      {{- if .Values.webhook.enabled }}
+      volumes:
+        - name: serving-cert
+          secret:
+            secretName: {{ include "resolver.name" . }}-serving-cert
+      {{- end }}
