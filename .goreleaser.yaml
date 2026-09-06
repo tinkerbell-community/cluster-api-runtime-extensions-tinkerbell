@@ -44,6 +44,30 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser
       - -extldflags '-static'
+  - id: talos-image-resolver
+    env: ["CGO_ENABLED=0"]
+    main: ./cmd/talos-image-resolver
+    binary: manager
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser
+      - -extldflags '-static'
+  - id: talos-upgrade-coordinator
+    env: ["CGO_ENABLED=0"]
+    main: ./cmd/talos-upgrade-coordinator
+    binary: manager
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser
+      - -extldflags '-static'
 
 checksum:
   name_template: "{{ .ArtifactName }}-checksums.txt"
@@ -109,6 +133,40 @@ dockers_v2:
     labels:
       "org.opencontainers.image.created": "{{.Date}}"
       "org.opencontainers.image.name": "tinkerbell-hardware-janitor"
+      "org.opencontainers.image.revision": "{{.FullCommit}}"
+      "org.opencontainers.image.version": "{{.Version}}"
+      "org.opencontainers.image.source": "{{.GitURL}}"
+  - id: talos-image-resolver
+    ids: ["talos-image-resolver"]
+    dockerfile: Dockerfile
+    extra_files:
+      - LICENSE
+    images:
+      - "{{ .Env.REGISTRY }}/tinkerbell-community/talos-image-resolver"
+    tags:
+      - '{{ if eq .Env.IS_RELEASE "true" }}{{ .Version }}{{ end }}'
+      - "{{ if not .IsNightly }}latest{{ end }}"
+      - '{{ if eq .Branch "main" }}sha-{{ .ShortCommit }}{{ end }}'
+    labels:
+      "org.opencontainers.image.created": "{{.Date}}"
+      "org.opencontainers.image.name": "talos-image-resolver"
+      "org.opencontainers.image.revision": "{{.FullCommit}}"
+      "org.opencontainers.image.version": "{{.Version}}"
+      "org.opencontainers.image.source": "{{.GitURL}}"
+  - id: talos-upgrade-coordinator
+    ids: ["talos-upgrade-coordinator"]
+    dockerfile: Dockerfile
+    extra_files:
+      - LICENSE
+    images:
+      - "{{ .Env.REGISTRY }}/tinkerbell-community/talos-upgrade-coordinator"
+    tags:
+      - '{{ if eq .Env.IS_RELEASE "true" }}{{ .Version }}{{ end }}'
+      - "{{ if not .IsNightly }}latest{{ end }}"
+      - '{{ if eq .Branch "main" }}sha-{{ .ShortCommit }}{{ end }}'
+    labels:
+      "org.opencontainers.image.created": "{{.Date}}"
+      "org.opencontainers.image.name": "talos-upgrade-coordinator"
       "org.opencontainers.image.revision": "{{.FullCommit}}"
       "org.opencontainers.image.version": "{{.Version}}"
       "org.opencontainers.image.source": "{{.GitURL}}"
