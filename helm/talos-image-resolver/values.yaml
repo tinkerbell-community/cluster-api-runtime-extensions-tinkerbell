@@ -1,0 +1,35 @@
+image:
+  repository: ghcr.io/tinkerbell-community/talos-image-resolver
+  # Defaults to the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+resolver:
+  # Namespace to watch for TinkerbellMachine/Hardware/TalosConfig. Empty
+  # watches all namespaces (RBAC becomes cluster-scoped); setting it scopes
+  # both the cache and the RBAC grants to that one namespace.
+  watchNamespace: ""
+  # Image Factory base URL; empty selects the public factory.
+  factoryURL: ""
+  # Tootles base URL (e.g. http://10.0.0.1:7080), used to build the
+  # talos.config kernel arg. One of tootlesURL or tinkerbellIP is required
+  # for raw-disk provisioning to succeed - without it nodes boot into
+  # maintenance mode.
+  tootlesURL: ""
+  # Tinkerbell IP; used to build the tootles URL when tootlesURL is unset.
+  tinkerbellIP: ""
+  # Maximum concurrent reconciles.
+  concurrency: 4
+
+leaderElection: true
+
+logging:
+  level: info
+  format: json
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    memory: 64Mi

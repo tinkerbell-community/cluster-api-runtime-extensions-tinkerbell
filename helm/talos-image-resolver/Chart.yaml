@@ -1,0 +1,9 @@
+apiVersion: v2
+name: talos-image-resolver
+description: Resolves per-machine Talos Image Factory schematics and writes image identity onto claimed Tinkerbell Hardware.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller
+sources:
+  - https://github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller
