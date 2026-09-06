@@ -3,10 +3,10 @@
 apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
-  name: {{ include "resolver.name" . }}-selfsigned
+  name: {{ include "carext.name" . }}-selfsigned
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "resolver.labels" . | nindent 4 }}
+    {{- include "carext.labels" . | nindent 4 }}
 spec:
   selfSigned: {}
 {{- end }}
@@ -14,33 +14,33 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: {{ include "resolver.name" . }}-serving-cert
+  name: {{ include "carext.name" . }}-serving-cert
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "resolver.labels" . | nindent 4 }}
+    {{- include "carext.labels" . | nindent 4 }}
 spec:
-  secretName: {{ include "resolver.name" . }}-serving-cert
+  secretName: {{ include "carext.name" . }}-serving-cert
   dnsNames:
-    - {{ include "resolver.name" . }}.{{ .Release.Namespace }}.svc
-    - {{ include "resolver.name" . }}.{{ .Release.Namespace }}.svc.cluster.local
+    - {{ include "carext.name" . }}.{{ .Release.Namespace }}.svc
+    - {{ include "carext.name" . }}.{{ .Release.Namespace }}.svc.cluster.local
   issuerRef:
     {{- if .Values.webhook.certManager.issuerRef }}
     {{- toYaml .Values.webhook.certManager.issuerRef | nindent 4 }}
     {{- else }}
-    name: {{ include "resolver.name" . }}-selfsigned
+    name: {{ include "carext.name" . }}-selfsigned
     kind: Issuer
     {{- end }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "resolver.name" . }}
+  name: {{ include "carext.name" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "resolver.labels" . | nindent 4 }}
+    {{- include "carext.labels" . | nindent 4 }}
 spec:
   selector:
-    {{- include "resolver.selectorLabels" . | nindent 4 }}
+    {{- include "carext.selectorLabels" . | nindent 4 }}
   ports:
     - name: webhook
       port: 443
@@ -50,16 +50,16 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  name: {{ include "resolver.name" . }}-workflow-gate
+  name: {{ include "carext.name" . }}-workflow-gate
   labels:
-    {{- include "resolver.labels" . | nindent 4 }}
+    {{- include "carext.labels" . | nindent 4 }}
   annotations:
-    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "resolver.name" . }}-serving-cert
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "carext.name" . }}-serving-cert
 webhooks:
-  - name: workflow-gate.resolve.tinkerbell.org
+  - name: workflow-gate.tinkerbell.org
     clientConfig:
       service:
-        name: {{ include "resolver.name" . }}
+        name: {{ include "carext.name" . }}
         namespace: {{ .Release.Namespace }}
         path: /validate-tinkerbell-org-v1alpha1-workflow
         port: 443

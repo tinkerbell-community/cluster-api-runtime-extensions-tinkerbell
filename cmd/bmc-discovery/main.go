@@ -21,11 +21,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/controller"
-	"github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/inventory"
-	"github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/logging"
-	"github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/mdns"
-	syncpkg "github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/sync"
+	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/controller"
+	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/inventory"
+	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/logging"
+	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/mdns"
+	syncpkg "github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/sync"
 )
 
 // splitNonEmpty splits a comma-separated list, dropping empty elements so an

@@ -7,7 +7,7 @@ import (
 
 	"github.com/bmc-toolbox/common"
 
-	"github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/mdns"
+	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/mdns"
 )
 
 func TestSanitizeName(t *testing.T) {

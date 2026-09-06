@@ -16,8 +16,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/inventory"
-	"github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/mdns"
+	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/inventory"
+	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/mdns"
 )
 
 // Syncer upserts the resources describing one discovered BMC.

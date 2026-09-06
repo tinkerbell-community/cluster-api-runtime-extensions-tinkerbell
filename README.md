@@ -1,4 +1,22 @@
-# tinkerbell-bmc-discovery-controller
+# cluster-api-runtime-extensions-tinkerbell
+
+The Talos + Tinkerbell lifecycle glue for Cluster API, packaged as a clusterctl
+`RuntimeExtensionProvider`: **two deployables, one release** (see
+[docs/runtime-extensions-migration.md](docs/runtime-extensions-migration.md)).
+
+- **`cmd/runtime-extensions`** — the consolidated manager: per-machine Talos
+  Image Factory resolution written onto claimed Hardware
+  (`talos-image-resolver`), the mandatory Workflow-CREATE admission gate, the
+  shipped `talos-install` Workflow Template, machine teardown
+  (`talos-machine-teardown`), released-hardware hygiene
+  (`tinkerbell-hardware-janitor`), and convergence-gated bootstrap-manifest
+  sync (`talos-upgrade-coordinator`). Each component keeps its own SSA
+  field-manager identity and feature gate.
+- **`cmd/bmc-discovery`** — the mDNS BMC discovery controller below, a
+  separate Deployment (hostNetwork/mDNS posture) bundled into the same
+  `runtime-extensions-components.yaml` (`make components`).
+
+## BMC discovery (`cmd/bmc-discovery`)
 
 A Kubernetes controller that discovers Baseboard Management Controllers (BMCs)
 on the local network via mDNS/DNS-SD, collects their hardware inventory over

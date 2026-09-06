@@ -1,5 +1,17 @@
 # Runtime Hook Glue - Talos + Tinkerbell
 
+> **2026-09-05 re-scope:** this repo is now `cluster-api-runtime-extensions-tinkerbell`
+> (module renamed; SP-0 of [docs/runtime-extensions-migration.md](docs/runtime-extensions-migration.md),
+> the binding successor to architecture.md). Two deployables: `cmd/runtime-extensions`
+> (consolidated manager: resolver + Workflow-CREATE gate + teardown + janitor +
+> upgrade-coordinator, feature-gated, webhook server dormant for future runtime hooks —
+> it must register ZERO in-place hooks) and `cmd/bmc-discovery` (unchanged posture),
+> released together via `charts/` → `make components` → `runtime-extensions-components.yaml`
+> + `metadata.yaml`. The C0–C5 component descriptions below remain accurate as component
+> designs; their packaging (own binary/chart each) is superseded by the consolidation,
+> and C2's mirror design is superseded by the resolver (`internal/resolve`,
+> [docs/talos-image-resolver.md](docs/talos-image-resolver.md)).
+
 This repo is a collection of independently deployable lifecycle glue components that bridge every gap
 between the Tinkerbell CAPI infrastructure provider (CAPT) and Talos Linux node lifecycle, for CAPI
 clusters provisioned by the terraform at `/home/appkins/src/tfc/cluster-bootstrap`. It also still hosts

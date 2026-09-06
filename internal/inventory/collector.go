@@ -15,7 +15,7 @@ import (
 	"github.com/jacobweinstock/registrar"
 	"github.com/stmcginnis/gofish"
 
-	"github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/mdns"
+	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/mdns"
 )
 
 // Credentials authenticate against a BMC.

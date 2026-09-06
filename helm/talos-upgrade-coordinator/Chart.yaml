@@ -1,9 +1,0 @@
-apiVersion: v2
-name: talos-upgrade-coordinator
-description: Cluster-scoped remainder of talosctl upgrade-k8s - convergence-gated Talos bootstrap-manifest SSA sync into the workload cluster.
-type: application
-version: 0.1.0
-appVersion: "0.1.0"
-home: https://github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller
-sources:
-  - https://github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller

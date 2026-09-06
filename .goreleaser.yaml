@@ -4,10 +4,13 @@ env:
   - REGISTRY={{ envOrDefault "REGISTRY" "ghcr.io" }}
   - IS_RELEASE={{ envOrDefault "IS_RELEASE" "false" }}
 
+# Two deployables (spec §2.1/§2.7): the consolidated runtime-extensions manager
+# and the mDNS BMC discovery controller. Both name the binary "manager" so they
+# share the Dockerfile; the per-image `ids` filter keeps contexts separate.
 builds:
-  - id: manager
+  - id: runtime-extensions
     env: ["CGO_ENABLED=0"]
-    main: ./cmd
+    main: ./cmd/runtime-extensions
     binary: manager
     goos:
       - linux
@@ -17,12 +20,9 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser
       - -extldflags '-static'
-  # Each lifecycle-glue component is its own binary + image (repo naming
-  # standard); all builds share the Dockerfile by naming the binary
-  # "manager" — the per-image `ids` filter keeps contexts separate.
-  - id: talos-machine-teardown
+  - id: bmc-discovery
     env: ["CGO_ENABLED=0"]
-    main: ./cmd/talos-machine-teardown
+    main: ./cmd/bmc-discovery
     binary: manager
     goos:
       - linux
@@ -32,42 +32,11 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser
       - -extldflags '-static'
-  - id: tinkerbell-hardware-janitor
-    env: ["CGO_ENABLED=0"]
-    main: ./cmd/tinkerbell-hardware-janitor
-    binary: manager
-    goos:
-      - linux
-    goarch:
-      - amd64
-      - arm64
-    ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser
-      - -extldflags '-static'
-  - id: talos-image-resolver
-    env: ["CGO_ENABLED=0"]
-    main: ./cmd/talos-image-resolver
-    binary: manager
-    goos:
-      - linux
-    goarch:
-      - amd64
-      - arm64
-    ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser
-      - -extldflags '-static'
-  - id: talos-upgrade-coordinator
-    env: ["CGO_ENABLED=0"]
-    main: ./cmd/talos-upgrade-coordinator
-    binary: manager
-    goos:
-      - linux
-    goarch:
-      - amd64
-      - arm64
-    ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser
-      - -extldflags '-static'
+
+# Render the single clusterctl components artifact alongside the binaries.
+before:
+  hooks:
+    - make components
 
 checksum:
   name_template: "{{ .ArtifactName }}-checksums.txt"
@@ -75,6 +44,9 @@ checksum:
 
 release:
   disable: true
+  extra_files:
+    - glob: dist/runtime-extensions-components.yaml
+    - glob: metadata.yaml
 
 snapshot:
   version_template: "{{ .Version }}-next"
@@ -83,13 +55,13 @@ changelog:
   disable: '{{ if eq .Env.IS_RELEASE "true" }}false{{ else }}true{{ end }}'
 
 dockers_v2:
-  - id: manager
-    ids: ["manager"]
+  - id: runtime-extensions
+    ids: ["runtime-extensions"]
     dockerfile: Dockerfile
     extra_files:
       - LICENSE
     images:
-      - '{{ .Env.REGISTRY }}/{{ envOrDefault "IMAGE_NAME" (trimsuffix (trimprefix .GitURL "https://github.com/") ".git") }}'
+      - "{{ .Env.REGISTRY }}/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell"
     tags:
       # No v prefix: the helm chart's default image tag is the bare
       # appVersion (e.g. "0.1.2").
@@ -98,75 +70,24 @@ dockers_v2:
       - '{{ if eq .Branch "main" }}sha-{{ .ShortCommit }}{{ end }}'
     labels:
       "org.opencontainers.image.created": "{{.Date}}"
-      "org.opencontainers.image.name": "{{.ProjectName}}"
+      "org.opencontainers.image.name": "cluster-api-runtime-extensions-tinkerbell"
       "org.opencontainers.image.revision": "{{.FullCommit}}"
       "org.opencontainers.image.version": "{{.Version}}"
       "org.opencontainers.image.source": "{{.GitURL}}"
-  - id: talos-machine-teardown
-    ids: ["talos-machine-teardown"]
+  - id: bmc-discovery
+    ids: ["bmc-discovery"]
     dockerfile: Dockerfile
     extra_files:
       - LICENSE
     images:
-      - "{{ .Env.REGISTRY }}/tinkerbell-community/talos-machine-teardown"
+      - "{{ .Env.REGISTRY }}/tinkerbell-community/tinkerbell-bmc-discovery-controller"
     tags:
       - '{{ if eq .Env.IS_RELEASE "true" }}{{ .Version }}{{ end }}'
       - "{{ if not .IsNightly }}latest{{ end }}"
       - '{{ if eq .Branch "main" }}sha-{{ .ShortCommit }}{{ end }}'
     labels:
       "org.opencontainers.image.created": "{{.Date}}"
-      "org.opencontainers.image.name": "talos-machine-teardown"
-      "org.opencontainers.image.revision": "{{.FullCommit}}"
-      "org.opencontainers.image.version": "{{.Version}}"
-      "org.opencontainers.image.source": "{{.GitURL}}"
-  - id: tinkerbell-hardware-janitor
-    ids: ["tinkerbell-hardware-janitor"]
-    dockerfile: Dockerfile
-    extra_files:
-      - LICENSE
-    images:
-      - "{{ .Env.REGISTRY }}/tinkerbell-community/tinkerbell-hardware-janitor"
-    tags:
-      - '{{ if eq .Env.IS_RELEASE "true" }}{{ .Version }}{{ end }}'
-      - "{{ if not .IsNightly }}latest{{ end }}"
-      - '{{ if eq .Branch "main" }}sha-{{ .ShortCommit }}{{ end }}'
-    labels:
-      "org.opencontainers.image.created": "{{.Date}}"
-      "org.opencontainers.image.name": "tinkerbell-hardware-janitor"
-      "org.opencontainers.image.revision": "{{.FullCommit}}"
-      "org.opencontainers.image.version": "{{.Version}}"
-      "org.opencontainers.image.source": "{{.GitURL}}"
-  - id: talos-image-resolver
-    ids: ["talos-image-resolver"]
-    dockerfile: Dockerfile
-    extra_files:
-      - LICENSE
-    images:
-      - "{{ .Env.REGISTRY }}/tinkerbell-community/talos-image-resolver"
-    tags:
-      - '{{ if eq .Env.IS_RELEASE "true" }}{{ .Version }}{{ end }}'
-      - "{{ if not .IsNightly }}latest{{ end }}"
-      - '{{ if eq .Branch "main" }}sha-{{ .ShortCommit }}{{ end }}'
-    labels:
-      "org.opencontainers.image.created": "{{.Date}}"
-      "org.opencontainers.image.name": "talos-image-resolver"
-      "org.opencontainers.image.revision": "{{.FullCommit}}"
-      "org.opencontainers.image.version": "{{.Version}}"
-      "org.opencontainers.image.source": "{{.GitURL}}"
-  - id: talos-upgrade-coordinator
-    ids: ["talos-upgrade-coordinator"]
-    dockerfile: Dockerfile
-    extra_files:
-      - LICENSE
-    images:
-      - "{{ .Env.REGISTRY }}/tinkerbell-community/talos-upgrade-coordinator"
-    tags:
-      - '{{ if eq .Env.IS_RELEASE "true" }}{{ .Version }}{{ end }}'
-      - "{{ if not .IsNightly }}latest{{ end }}"
-      - '{{ if eq .Branch "main" }}sha-{{ .ShortCommit }}{{ end }}'
-    labels:
-      "org.opencontainers.image.created": "{{.Date}}"
-      "org.opencontainers.image.name": "talos-upgrade-coordinator"
+      "org.opencontainers.image.name": "tinkerbell-bmc-discovery-controller"
       "org.opencontainers.image.revision": "{{.FullCommit}}"
       "org.opencontainers.image.version": "{{.Version}}"
       "org.opencontainers.image.source": "{{.GitURL}}"

@@ -13,19 +13,25 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// Reconciler scrubs released Hardware. The manager cache is filtered
-// server-side to owner-label-absent Hardware (see cmd main), so claimed
-// objects never even reach the informer; the remaining conjuncts are
-// evaluated here.
+// Reconciler scrubs released Hardware. The consolidated manager's cache is
+// cluster-wide and unfiltered (the resolver's Hardware watch needs claimed
+// objects), so every conjunct of the released predicate — and the namespace
+// bound — is evaluated here, per reconcile, against a fresh read.
 type Reconciler struct {
 	client.Client
 	Recorder events.EventRecorder
 	Opts     Options
+	// Namespace bounds the janitor to one Hardware namespace ("" = all).
+	Namespace string
 }
 
 // Reconcile classifies one Hardware and scrubs it when released.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
+
+	if r.Namespace != "" && req.Namespace != r.Namespace {
+		return ctrl.Result{}, nil
+	}
 
 	hw := &tinkv1.Hardware{}
 	if err := r.Get(ctx, req.NamespacedName, hw); err != nil {
@@ -85,9 +91,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager wires the controller. The cache (configured in cmd main)
-// already restricts the informer to owner-label-absent Hardware in the
-// target namespace, so a release arrives as a plain Add event.
+// SetupWithManager wires the controller. The shared informer is unfiltered, so
+// a release (owner-label removal) arrives as a plain Update event; Classify
+// re-verifies every conjunct before any write, and the resourceVersion-guarded
+// Update defends the release-vs-reclaim race regardless of cache freshness.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(Name).

@@ -16,9 +16,9 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/inventory"
-	"github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/mdns"
-	syncpkg "github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/sync"
+	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/inventory"
+	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/mdns"
+	syncpkg "github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/sync"
 )
 
 // Worker consumes discovered endpoints, collects their inventory, and syncs

@@ -53,6 +53,29 @@ func getHW(t *testing.T, c client.Client, name string) *tinkv1.Hardware {
 	return hw
 }
 
+// TestReconcileNamespaceBound asserts the janitor never scrubs outside its
+// configured namespace: in the consolidated manager the cache is cluster-wide,
+// so the bound moved from the cache config into the reconciler.
+func TestReconcileNamespaceBound(t *testing.T) {
+	outside := releasedHardware()
+	outside.Namespace = "elsewhere"
+	r, c, _ := newReconciler(t, outside)
+	r.Namespace = "tinkerbell"
+
+	if _, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: "elsewhere", Name: outside.Name},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	hw := &tinkv1.Hardware{}
+	if err := c.Get(context.Background(), types.NamespacedName{Namespace: "elsewhere", Name: outside.Name}, hw); err != nil {
+		t.Fatal(err)
+	}
+	if hw.Spec.UserData == nil {
+		t.Error("hardware outside the janitor namespace was scrubbed")
+	}
+}
+
 func TestReconcileScrubsReleased(t *testing.T) {
 	r, c, recorder := newReconciler(t, releasedHardware())
 

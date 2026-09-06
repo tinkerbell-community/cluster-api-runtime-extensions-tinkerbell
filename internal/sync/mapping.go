@@ -11,8 +11,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
-	"github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/inventory"
-	"github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/mdns"
+	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/inventory"
+	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/mdns"
 )
 
 const (

@@ -17,7 +17,7 @@ metadata:
   name: talos-install-{{ sha256sum $body | trunc 10 }}
   namespace: {{ .Values.template.namespace }}
   labels:
-    {{- include "resolver.labels" . | nindent 4 }}
+    {{- include "carext.labels" . | nindent 4 }}
 spec:
   data: |
 {{ $body | indent 4 }}

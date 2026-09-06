@@ -20,9 +20,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/inventory"
-	"github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/mdns"
-	syncpkg "github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/sync"
+	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/inventory"
+	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/mdns"
+	syncpkg "github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/sync"
 )
 
 type fakeBrowser struct {
