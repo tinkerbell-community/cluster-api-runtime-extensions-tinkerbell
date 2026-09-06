@@ -52,6 +52,11 @@ const (
 	// distro is the constant operating_system.distro value.
 	distro = "talos"
 
+	// operating_system leaf keys, shared by the sparse apply and the Workflow gate.
+	osFieldSlug    = "slug"
+	osFieldVersion = "version"
+	osFieldOsSlug  = "os_slug"
+
 	// nvmeCLIExtension is the NVMe userspace tooling built in when an NVMe disk is present.
 	nvmeCLIExtension = "siderolabs/nvme-cli"
 

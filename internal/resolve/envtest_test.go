@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	tinkv1 "github.com/tinkerbell/tinkerbell/api/v1alpha1/tinkerbell"
+	admissionv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,14 +30,18 @@ import (
 )
 
 var (
-	envCfg    *rest.Config
-	envClient client.Client
+	envCfg     *rest.Config
+	envClient  client.Client
+	envWebhook *envtest.WebhookInstallOptions
 )
 
 func TestMain(m *testing.M) {
 	testEnv := &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "test", "crds")},
 		ErrorIfCRDPathMissing: true,
+		WebhookInstallOptions: envtest.WebhookInstallOptions{
+			ValidatingWebhooks: []*admissionv1.ValidatingWebhookConfiguration{gateWebhookConfiguration()},
+		},
 	}
 	cfg, err := testEnv.Start()
 	if err != nil {
@@ -52,6 +57,7 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "building client: %v\n", err)
 		os.Exit(1)
 	}
+	envWebhook = &testEnv.WebhookInstallOptions
 	code := m.Run()
 	_ = testEnv.Stop()
 	os.Exit(code)

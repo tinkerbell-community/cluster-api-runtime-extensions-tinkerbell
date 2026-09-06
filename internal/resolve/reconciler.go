@@ -208,11 +208,11 @@ func (r *Reconciler) apply(ctx context.Context, hw *tinkv1.Hardware, plan *Plan)
 	if plan.OperatingSystem != nil {
 		os := plan.OperatingSystem
 		if err := unstructured.SetNestedMap(u.Object, map[string]any{
-			"slug":      os.Slug,
-			"distro":    os.Distro,
-			"version":   os.Version,
-			"image_tag": os.ImageTag,
-			"os_slug":   os.OsSlug,
+			osFieldSlug:    os.Slug,
+			"distro":       os.Distro,
+			osFieldVersion: os.Version,
+			"image_tag":    os.ImageTag,
+			osFieldOsSlug:  os.OsSlug,
 		}, "spec", "metadata", "instance", "operating_system"); err != nil {
 			return err
 		}

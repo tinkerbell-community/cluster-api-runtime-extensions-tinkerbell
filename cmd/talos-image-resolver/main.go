@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/logging"
 	"github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller/internal/resolve"
@@ -44,6 +45,9 @@ type options struct {
 	probeAddr      string
 	logLevel       string
 	logFormat      string
+	workflowGate   bool
+	webhookPort    int
+	webhookCertDir string
 }
 
 func registerFlags(o *options) {
@@ -57,6 +61,11 @@ func registerFlags(o *options) {
 	flag.StringVar(&o.probeAddr, "health-probe-bind-address", ":8081", "Health probe bind address.")
 	flag.StringVar(&o.logLevel, "log-level", "info", "Log level: debug, info, warn, or error.")
 	flag.StringVar(&o.logFormat, "log-format", "json", "Log format: json or text.")
+	flag.BoolVar(&o.workflowGate, "enable-workflow-gate", true,
+		"Serve the mandatory Workflow-CREATE admission gate that holds renders until operating_system is written.")
+	flag.IntVar(&o.webhookPort, "webhook-port", 9443, "Webhook server port (workflow gate).")
+	flag.StringVar(&o.webhookCertDir, "webhook-cert-dir", "",
+		"Directory holding tls.crt/tls.key for the webhook server; empty uses the controller-runtime default.")
 }
 
 func main() {
@@ -110,6 +119,14 @@ func run(opts options, log *slog.Logger) error {
 	if err := reconciler.SetupWithManager(mgr, opts.concurrency); err != nil {
 		return fmt.Errorf("setting up controller: %w", err)
 	}
+	if opts.workflowGate {
+		// The gate is mandatory in production (spec §3.7): without it a Workflow that
+		// renders before the resolver writes operating_system bricks the machine. The
+		// flag exists for bring-up ordering only, never as a steady-state posture.
+		if err := (&resolve.WorkflowGate{}).SetupWithManager(mgr); err != nil {
+			return fmt.Errorf("setting up workflow gate: %w", err)
+		}
+	}
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		return fmt.Errorf("setting up health check: %w", err)
 	}
@@ -134,12 +151,22 @@ func buildManager(opts options) (ctrl.Manager, error) {
 		cacheOptions.DefaultNamespaces = map[string]cache.Config{opts.watchNamespace: {}}
 	}
 
-	return ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	managerOptions := ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsserver.Options{BindAddress: opts.metricsAddr},
 		HealthProbeBindAddress: opts.probeAddr,
 		LeaderElection:         opts.leaderElect,
 		LeaderElectionID:       "talos-image-resolver.resolve.tinkerbell.org",
 		Cache:                  cacheOptions,
-	})
+	}
+	if opts.workflowGate {
+		// The webhook server is a non-leader-election runnable: every replica answers
+		// admission, so the gate stays available under failurePolicy: Fail (spec §2.4).
+		managerOptions.WebhookServer = webhook.NewServer(webhook.Options{
+			Port:    opts.webhookPort,
+			CertDir: opts.webhookCertDir,
+		})
+	}
+
+	return ctrl.NewManager(ctrl.GetConfigOrDie(), managerOptions)
 }
