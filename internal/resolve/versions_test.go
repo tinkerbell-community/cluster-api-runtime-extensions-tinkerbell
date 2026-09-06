@@ -94,3 +94,60 @@ func TestVersionsAreCachedWithinTTL(t *testing.T) {
 		t.Errorf("factory hit %d times, want 1 (cached within TTL)", hits)
 	}
 }
+
+func TestStaleCacheServedOnRefreshError(t *testing.T) {
+	t.Parallel()
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if atomic.AddInt32(&hits, 1) == 1 {
+			_ = json.NewEncoder(w).Encode(realisticVersions())
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	r := NewVersionResolver(srv.URL)
+
+	// Warm the cache with the one good response the server ever gives.
+	patch, err := r.LatestPatch(context.Background(), "v1.13.9")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if patch != "v1.13.10" {
+		t.Fatalf("warm LatestPatch = %q, want v1.13.10", patch)
+	}
+	minor, err := r.LatestMinor(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if minor != "v1.14" {
+		t.Fatalf("warm LatestMinor = %q, want v1.14", minor)
+	}
+
+	// Force the next access to treat the cache as expired, without waiting out the real
+	// 10-minute TTL, so it re-fetches and hits the server's 500.
+	r.mu.Lock()
+	r.ttl = 0
+	r.mu.Unlock()
+
+	patch, err = r.LatestPatch(context.Background(), "v1.13.9")
+	if err != nil {
+		t.Errorf("LatestPatch after failed refresh returned error %v, want nil (stale cache served)", err)
+	}
+	if patch != "v1.13.10" {
+		t.Errorf("LatestPatch after failed refresh = %q, want v1.13.10 (stale cache)", patch)
+	}
+
+	minor, err = r.LatestMinor(context.Background())
+	if err != nil {
+		t.Errorf("LatestMinor after failed refresh returned error %v, want nil (stale cache served)", err)
+	}
+	if minor != "v1.14" {
+		t.Errorf("LatestMinor after failed refresh = %q, want v1.14 (stale cache)", minor)
+	}
+
+	if got := atomic.LoadInt32(&hits); got < 2 {
+		t.Errorf("factory hit %d times, want >= 2 (warm fetch + at least one failed refresh)", got)
+	}
+}
