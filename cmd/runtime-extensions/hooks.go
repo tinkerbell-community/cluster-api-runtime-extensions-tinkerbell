@@ -32,6 +32,16 @@ func runtimeExtensionHandlers() []runtimeserver.ExtensionHandler {
 			Name:        talos.DiscoverVariablesHandlerName,
 			HandlerFunc: (&talos.VariablesHandler{}).DiscoverVariables,
 		},
+		{
+			Hook:        runtimehooksv1.GeneratePatches,
+			Name:        talos.ClusterPatchHandlerName,
+			HandlerFunc: (&talos.ClusterPatchHandler{}).GeneratePatches,
+		},
+		{
+			Hook:        runtimehooksv1.GeneratePatches,
+			Name:        talos.WorkerPatchHandlerName,
+			HandlerFunc: (&talos.WorkerPatchHandler{}).GeneratePatches,
+		},
 	}
 }
 
