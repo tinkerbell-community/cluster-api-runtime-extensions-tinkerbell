@@ -50,7 +50,6 @@ const (
 	ProvisionedAnnotation = "v1alpha1.tinkerbell.org/provisioned"
 
 	// distro is the constant operating_system.distro value.
-	//nolint:unused // consumed by the Hardware-writing task (C1) that builds on this package.
 	distro = "talos"
 
 	// nvmeCLIExtension is the NVMe userspace tooling built in when an NVMe disk is present.
