@@ -22,6 +22,14 @@ test-envtest:
 vet:
 	go vet ./...
 
+# Regenerate deepcopy + the embedded (never-installed) variable CRDs after
+# editing api/v1alpha1 types. The schema tests fail if the output drifts.
+CONTROLLER_GEN_VERSION ?= v0.19.0
+.PHONY: generate
+generate:
+	go run sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION) object paths="./api/v1alpha1/..."
+	go run sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION) crd paths="./api/v1alpha1/..." output:crd:artifacts:config=api/v1alpha1/crds
+
 .PHONY: fmt-check
 fmt-check:
 	@out="$$(gofmt -l .)"; if [ -n "$$out" ]; then echo "gofmt needed on:"; echo "$$out"; exit 1; fi

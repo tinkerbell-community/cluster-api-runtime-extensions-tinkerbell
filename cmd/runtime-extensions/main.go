@@ -31,13 +31,13 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/component-base/featuregate"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	runtimeserver "sigs.k8s.io/cluster-api/exp/runtime/server"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/janitor"
 	"github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell/internal/logging"
@@ -61,6 +61,11 @@ const (
 	FeatureMachineTeardown    featuregate.Feature = "MachineTeardown"
 	FeatureHardwareJanitor    featuregate.Feature = "HardwareJanitor"
 	FeatureUpgradeCoordinator featuregate.Feature = "UpgradeCoordinator"
+	// FeatureRuntimeHooks serves the CAPI Runtime SDK topology hooks
+	// (DiscoverVariables now; GeneratePatches with the SP-7 mutators). Inert
+	// until the core manager runs ClusterTopology+RuntimeSDK and an
+	// ExtensionConfig routes to this Service.
+	FeatureRuntimeHooks featuregate.Feature = "RuntimeHooks"
 )
 
 func newFeatureGates() featuregate.MutableFeatureGate {
@@ -71,6 +76,7 @@ func newFeatureGates() featuregate.MutableFeatureGate {
 		FeatureMachineTeardown:    {Default: true, PreRelease: featuregate.Beta},
 		FeatureHardwareJanitor:    {Default: true, PreRelease: featuregate.Beta},
 		FeatureUpgradeCoordinator: {Default: true, PreRelease: featuregate.Beta},
+		FeatureRuntimeHooks:       {Default: true, PreRelease: featuregate.Beta},
 	}); err != nil {
 		panic(err)
 	}
@@ -375,14 +381,25 @@ func buildManager(opts options, gates featuregate.FeatureGate) (ctrl.Manager, er
 			},
 		},
 	}
-	if gates.Enabled(FeatureWorkflowGate) {
-		// The webhook server is a non-leader-election runnable: every replica
-		// answers admission, so failurePolicy Fail stays available (spec §2.4).
-		managerOptions.WebhookServer = webhook.NewServer(webhook.Options{
-			Port:    opts.webhookPort,
-			CertDir: opts.webhookCertDir,
-		})
+	// The CAPI runtime server IS the webhook server (spec §2.2): one process,
+	// one listener, one cert. It hosts the admission webhooks (the workflow
+	// gate registers into its mux via the standard builder) and the Runtime SDK
+	// hooks. Webhook serving is a non-leader-election runnable: every replica
+	// answers, so failurePolicy Fail stays available (spec §2.4).
+	runtimeSrv, err := runtimeserver.New(runtimeserver.Options{
+		Catalog: runtimeCatalog(),
+		Port:    opts.webhookPort,
+		CertDir: opts.webhookCertDir,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("building runtime server: %w", err)
 	}
+	if gates.Enabled(FeatureRuntimeHooks) {
+		if err := registerRuntimeHooks(runtimeSrv); err != nil {
+			return nil, err
+		}
+	}
+	managerOptions.WebhookServer = runtimeSrv
 
 	return ctrl.NewManager(ctrl.GetConfigOrDie(), managerOptions)
 }

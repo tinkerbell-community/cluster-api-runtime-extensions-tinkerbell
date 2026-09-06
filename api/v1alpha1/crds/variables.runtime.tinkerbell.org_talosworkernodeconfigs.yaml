@@ -1,0 +1,61 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: talosworkernodeconfigs.variables.runtime.tinkerbell.org
+spec:
+  group: variables.runtime.tinkerbell.org
+  names:
+    kind: TalosWorkerNodeConfig
+    listKind: TalosWorkerNodeConfigList
+    plural: talosworkernodeconfigs
+    singular: talosworkernodeconfig
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: TalosWorkerNodeConfig is the variable root. Never installed;
+          schema-only.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              TalosWorkerNodeConfigSpec is the schema of the optional `workerConfig`
+              topology variable; per-MachineDeployment differences ride CAPI-native
+              MD-level variable overrides.
+            properties:
+              talos:
+                description: talos carries the Talos-specific worker settings.
+                properties:
+                  version:
+                    description: |-
+                      version is the Talos OS version the cluster tracks, e.g. "v1.13.9" (full
+                      pin), "v1.13" (track the minor's latest GA patch), or "latest". It drives
+                      both provisioning and in-place upgrades — changing it IS the supported
+                      upgrade trigger, so it is deliberately mutable (no self == oldSelf CEL).
+                    pattern: ^(latest|v[0-9]+\.[0-9]+(\.[0-9]+)?([-+].+)?)$
+                    type: string
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
