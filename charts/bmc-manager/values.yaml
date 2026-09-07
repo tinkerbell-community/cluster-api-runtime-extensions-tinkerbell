@@ -1,0 +1,114 @@
+image:
+  repository: ghcr.io/tinkerbell-community/bmc-manager
+  # Defaults to the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+enrollment:
+  # AMTProfile used by devices that do not name one.
+  defaultProfile: default
+  # Timeout for one AMT operation. AMT firmware is slow to wake.
+  deviceTimeout: 30s
+  # How often a healthy device is re-read.
+  resyncInterval: 1h
+  # How soon an unreachable or unverifiable device is retried.
+  retryInterval: 5m
+
+# Fleet-wide AMT policy, rendered as the AMTProfile named above.
+profile:
+  create: true
+  # Best takes Admin Control Mode where the platform allows it, else Client.
+  # This is advisory: this release does not activate devices, so the mode is
+  # whatever out-of-band onboarding produced. It is reported back in
+  # AMTDevice.status.controlMode.
+  controlMode: Best
+  password:
+    length: 24
+    # Rotation is disabled by default. It works over the network, but the old
+    # password dies the instant the write lands, so enable it only once you
+    # have exercised it on a spare device.
+    rotation: ""
+  tls:
+    # Pin records the device certificate on first verified connection and
+    # refuses to connect if it later changes. AMT ships a self-signed
+    # certificate that no chain can validate, so pinning is what makes the
+    # connection trustworthy at all.
+    mode: Pin
+  redirection:
+    sol: false
+    ider: false
+    # The redirection listener is independent of the redirection state: with
+    # it off, ports 16994/16995 stay closed even when SOL is enabled.
+    listenerEnabled: false
+  # None, KVM or All. Only honoured in Admin Control Mode.
+  consent: KVM
+  timeSync: true
+  virtualMedia:
+    # Devices whose firmware does not report UEFI HTTPS boot never get a
+    # VirtualMedia resource regardless of this setting.
+    enabled: true
+    enforceSecureBoot: false
+
+credentials:
+  # Ordered list of Secrets holding candidate username/password pairs. The
+  # controller pivots through them, verifying each against the device, and
+  # records the pair that worked in a per-device Secret.
+  #
+  # Devices are onboarded out of band (see docs/bmc-manager.md); these are the
+  # credentials that onboarding set.
+  sources:
+    - name: amt-credentials
+  # Create the Secret below rather than managing it yourself.
+  create: false
+  name: amt-credentials
+  username: admin
+  password: ""
+
+hardware:
+  # metadata.facility.facility_code on created Hardware ("" omits it).
+  facilityCode: onprem
+  # spec.auto.enrollmentEnabled on created Hardware.
+  autoEnrollment: false
+
+redfish:
+  enabled: true
+  port: 8443
+  # Stable UUID advertised in the Redfish service root. Leave empty and the
+  # service appears to change identity on every restart.
+  serviceUUID: ""
+  service:
+    type: ClusterIP
+  tls:
+    # Secret with tls.crt and tls.key. AMT will not fetch a boot image over
+    # plaintext, so virtual media requires this.
+    secretName: ""
+
+images:
+  # Serve boot images for UEFI HTTPS boot. AMT fetches the image itself, so
+  # the URL below must be reachable from devices and present a certificate
+  # they trust.
+  enabled: false
+  # External https:// base URL of the image server as devices see it.
+  baseURL: ""
+  persistence:
+    # Existing PVC holding the images. Empty uses an emptyDir, which is only
+    # useful for testing.
+    existingClaim: ""
+
+leaderElection: true
+
+# The controller needs routable reachability to AMT on 16992/16993, which is
+# ordinary pod networking on most layouts. Unlike the mDNS discovery
+# controller it needs no multicast, so it runs as a normal Deployment.
+networking:
+  hostNetwork: false
+
+# debug, info, warn, or error.
+logLevel: info
+# json or text.
+logFormat: json
+
+resources: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

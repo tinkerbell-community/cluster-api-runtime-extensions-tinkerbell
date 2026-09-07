@@ -1,0 +1,365 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: amtdevices.amt.tinkerbell.org
+spec:
+  group: amt.tinkerbell.org
+  names:
+    kind: AMTDevice
+    listKind: AMTDeviceList
+    plural: amtdevices
+    shortNames:
+    - amtd
+    singular: amtdevice
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.endpoint.host
+      name: Host
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.controlMode
+      name: Mode
+      type: string
+    - jsonPath: .status.firmware.amt
+      name: AMT
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: AMTDevice is an Intel AMT managed device.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AMTDeviceSpec is the desired state for one AMT device.
+            properties:
+              credentialsRef:
+                description: |-
+                  CredentialsRef names the Secret holding the verified username, password
+                  and previousPassword for this device. Created by the controller once a
+                  candidate pair authenticates.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              endpoint:
+                description: Endpoint locates the WS-Man service.
+                properties:
+                  host:
+                    description: Host is the device address.
+                    minLength: 1
+                    type: string
+                  port:
+                    default: 16993
+                    description: Port is the WS-Man port. 16993 is TLS, 16992 plaintext.
+                    format: int32
+                    type: integer
+                  scheme:
+                    default: https
+                    description: Scheme is http or https.
+                    enum:
+                    - http
+                    - https
+                    type: string
+                required:
+                - host
+                type: object
+              identity:
+                description: Identity holds stable identifiers. Fields left empty
+                  are discovered.
+                properties:
+                  macAddresses:
+                    description: MACAddresses of the host NICs, lower-case colon-separated.
+                    items:
+                      type: string
+                    type: array
+                  platformGUID:
+                    description: |-
+                      PlatformGUID from CIM_ComputerSystemPackage. This is the stable identity
+                      across reboots, address changes and renames, and keys every Redfish
+                      resource.
+                    type: string
+                type: object
+              profileRef:
+                default:
+                  name: default
+                description: ProfileRef names the cluster-scoped AMTProfile governing
+                  this device.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+            required:
+            - endpoint
+            type: object
+          status:
+            description: AMTDeviceStatus is the observed state of one AMT device.
+            properties:
+              allowedControlModes:
+                description: |-
+                  AllowedControlModes reports which modes host-based setup may enter.
+                  Recorded because it determines whether cert-free Admin activation is
+                  possible on this platform.
+                items:
+                  type: string
+                type: array
+              bootCapabilities:
+                description: |-
+                  BootCapabilities mirrors AMT_BootCapabilities. It is observed, never
+                  desired: it gates what the Redfish aggregator advertises for this device.
+                properties:
+                  biosSetup:
+                    type: boolean
+                  cdDVD:
+                    type: boolean
+                  hardDrive:
+                    type: boolean
+                  ider:
+                    type: boolean
+                  pxe:
+                    type: boolean
+                  secureBootControl:
+                    type: boolean
+                  sol:
+                    type: boolean
+                  uefiHTTPS:
+                    description: |-
+                      UEFIHTTPS reports ForceUEFIHTTPSBoot. Redfish VirtualMedia is advertised
+                      only when this is true.
+                    type: boolean
+                type: object
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              controlMode:
+                description: |-
+                  ControlMode is the observed AMT control mode: Admin, Client or
+                  NotProvisioned.
+                type: string
+              digestRealm:
+                description: |-
+                  DigestRealm from AMT_GeneralSettings, needed to compute the digest
+                  password for rotation.
+                type: string
+              firmware:
+                description: FirmwareInfo reports AMT firmware versions from CIM_SoftwareIdentity.
+                properties:
+                  amt:
+                    type: string
+                  build:
+                    type: string
+                  recovery:
+                    type: string
+                  sku:
+                    type: string
+                type: object
+              hardwareRef:
+                description: |-
+                  LocalObjectReference contains enough information to let you locate the
+                  referenced object inside the same namespace.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              inventory:
+                description: |-
+                  InventorySummary is a digest of the collected CIM inventory, enough to
+                  render Redfish without a live device call.
+                properties:
+                  baseboardModel:
+                    type: string
+                  baseboardSerial:
+                    type: string
+                  biosVersion:
+                    type: string
+                  cpuCount:
+                    format: int32
+                    type: integer
+                  cpuModel:
+                    type: string
+                  manufacturer:
+                    type: string
+                  memoryBytes:
+                    format: int64
+                    type: integer
+                  model:
+                    type: string
+                  nics:
+                    items:
+                      description: NIC is one host network interface as reported by
+                        CIM_EthernetPort.
+                      properties:
+                        macAddress:
+                          type: string
+                        name:
+                          type: string
+                      type: object
+                    type: array
+                  serialNumber:
+                    type: string
+                type: object
+              lastRotatedTime:
+                description: LastRotatedTime is when the admin password was last rotated.
+                format: date-time
+                type: string
+              lastVerifiedTime:
+                description: LastVerifiedTime is when a credential pair last authenticated.
+                format: date-time
+                type: string
+              machineRef:
+                description: |-
+                  LocalObjectReference contains enough information to let you locate the
+                  referenced object inside the same namespace.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              observedGeneration:
+                format: int64
+                type: integer
+              phase:
+                description: Phase is the coarse enrollment state of an AMT device.
+                type: string
+              provisioningState:
+                description: |-
+                  ProvisioningState is PreProvisioning, InProvisioning or
+                  PostProvisioning.
+                type: string
+              redirection:
+                description: RedirectionStatus mirrors AMT_RedirectionService.
+                properties:
+                  enabledState:
+                    description: |-
+                      EnabledState is the raw AMT value: 32768 disabled, 32769 IDER only,
+                      32770 SOL only, 32771 both.
+                    format: int32
+                    type: integer
+                  listenerEnabled:
+                    description: |-
+                      ListenerEnabled reports whether the redirection listener is open. When
+                      false, ports 16994/16995 are closed regardless of EnabledState.
+                    type: boolean
+                type: object
+              tlsFingerprint:
+                description: |-
+                  TLSFingerprint is the pinned SHA-256 of the device certificate. Once
+                  set, a mismatch is a hard connection failure.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

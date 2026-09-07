@@ -1,0 +1,78 @@
+{{/*
+AMTProfile is cluster-scoped, so it needs a ClusterRole. Everything else the
+manager touches is namespaced and stays in a Role: the manager has no reason
+to reach Secrets, Machines or Hardware outside its own namespace, and a
+ClusterRole granting that would be a much larger blast radius than the work
+requires.
+*/}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "bmc-manager.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "bmc-manager.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [amt.tinkerbell.org]
+    resources: [amtdevices]
+    verbs: [get, list, watch, create, update, patch]
+  - apiGroups: [amt.tinkerbell.org]
+    resources: [amtdevices/status]
+    verbs: [get, update, patch]
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, list, watch, create, update, patch]
+  - apiGroups: [bmc.tinkerbell.org]
+    resources: [machines]
+    verbs: [get, list, watch, create, update, patch]
+  - apiGroups: [tinkerbell.org]
+    resources: [hardware]
+    verbs: [get, list, watch, create, update, patch]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, update, patch]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "bmc-manager.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "bmc-manager.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "bmc-manager.name" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "bmc-manager.name" . }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "bmc-manager.name" . }}
+  labels:
+    {{- include "bmc-manager.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [amt.tinkerbell.org]
+    resources: [amtprofiles]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "bmc-manager.name" . }}
+  labels:
+    {{- include "bmc-manager.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "bmc-manager.name" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "bmc-manager.name" . }}
+    namespace: {{ .Release.Namespace }}

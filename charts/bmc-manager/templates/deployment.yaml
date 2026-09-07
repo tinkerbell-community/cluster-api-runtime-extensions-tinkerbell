@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "bmc-manager.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "bmc-manager.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "bmc-manager.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "bmc-manager.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "bmc-manager.name" . }}
+      hostNetwork: {{ .Values.networking.hostNetwork }}
+      {{- if .Values.networking.hostNetwork }}
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: manager
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --namespace={{ .Release.Namespace }}
+            - --default-profile={{ .Values.enrollment.defaultProfile }}
+            - --device-timeout={{ .Values.enrollment.deviceTimeout }}
+            - --resync-interval={{ .Values.enrollment.resyncInterval }}
+            - --retry-interval={{ .Values.enrollment.retryInterval }}
+            - --facility-code={{ .Values.hardware.facilityCode }}
+            - --auto-enrollment={{ .Values.hardware.autoEnrollment }}
+            - --leader-elect={{ .Values.leaderElection }}
+            - --redfish={{ .Values.redfish.enabled }}
+            {{- if .Values.redfish.enabled }}
+            - --redfish-bind-address=:{{ .Values.redfish.port }}
+            {{- with .Values.redfish.serviceUUID }}
+            - --redfish-service-uuid={{ . }}
+            {{- end }}
+            - --enforce-secure-boot={{ .Values.profile.virtualMedia.enforceSecureBoot }}
+            {{- with .Values.redfish.tls.secretName }}
+            - --tls-cert-file=/etc/bmc-manager/tls/tls.crt
+            - --tls-key-file=/etc/bmc-manager/tls/tls.key
+            {{- end }}
+            {{- end }}
+            {{- if .Values.images.enabled }}
+            - --image-root=/var/lib/bmc-manager/images
+            - --image-base-url={{ required "images.baseURL is required when images.enabled is true: AMT fetches the image itself, so it must know where from" .Values.images.baseURL }}
+            {{- end }}
+            - --log-level={{ .Values.logLevel }}
+            - --log-format={{ .Values.logFormat }}
+          ports:
+            - name: metrics
+              containerPort: 8080
+            - name: probes
+              containerPort: 8081
+            {{- if .Values.redfish.enabled }}
+            - name: redfish
+              containerPort: {{ .Values.redfish.port }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: probes
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: probes
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            {{- if .Values.redfish.tls.secretName }}
+            - name: tls
+              mountPath: /etc/bmc-manager/tls
+              readOnly: true
+            {{- end }}
+            {{- if .Values.images.enabled }}
+            - name: images
+              mountPath: /var/lib/bmc-manager/images
+              readOnly: true
+            {{- end }}
+      volumes:
+        {{- if .Values.redfish.tls.secretName }}
+        - name: tls
+          secret:
+            secretName: {{ .Values.redfish.tls.secretName }}
+        {{- end }}
+        {{- if .Values.images.enabled }}
+        - name: images
+          {{- if .Values.images.persistence.existingClaim }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.images.persistence.existingClaim }}
+            readOnly: true
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

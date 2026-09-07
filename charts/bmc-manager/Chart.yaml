@@ -1,0 +1,9 @@
+apiVersion: v2
+name: bmc-manager
+description: Manages Intel AMT devices as BMCs and serves them through a Redfish aggregator.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller
+sources:
+  - https://github.com/tinkerbell-community/tinkerbell-bmc-discovery-controller

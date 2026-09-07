@@ -1,0 +1,36 @@
+{{- if .Values.profile.create }}
+apiVersion: amt.tinkerbell.org/v1alpha1
+kind: AMTProfile
+metadata:
+  name: {{ .Values.enrollment.defaultProfile }}
+  labels:
+    {{- include "bmc-manager.labels" . | nindent 4 }}
+spec:
+  controlMode: {{ .Values.profile.controlMode }}
+  {{- with .Values.credentials.sources }}
+  credentialSources:
+    {{- range . }}
+    - name: {{ .name }}
+      namespace: {{ .namespace | default $.Release.Namespace }}
+    {{- end }}
+  {{- end }}
+  password:
+    length: {{ .Values.profile.password.length }}
+    {{- with .Values.profile.password.rotation }}
+    rotation: {{ . }}
+    {{- end }}
+  tls:
+    mode: {{ .Values.profile.tls.mode }}
+  redirection:
+    sol: {{ .Values.profile.redirection.sol }}
+    ider: {{ .Values.profile.redirection.ider }}
+    listenerEnabled: {{ .Values.profile.redirection.listenerEnabled }}
+  consent: {{ .Values.profile.consent }}
+  timeSync: {{ .Values.profile.timeSync }}
+  virtualMedia:
+    enabled: {{ .Values.profile.virtualMedia.enabled }}
+    enforceSecureBoot: {{ .Values.profile.virtualMedia.enforceSecureBoot }}
+    {{- with .Values.images.baseURL }}
+    imageBaseURL: {{ . }}
+    {{- end }}
+{{- end }}

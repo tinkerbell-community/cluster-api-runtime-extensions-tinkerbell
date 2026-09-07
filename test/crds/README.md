@@ -7,3 +7,7 @@ them when bumping the api dependency:
 
 - `tinkerbell.org_hardware.yaml`
 - `bmc.tinkerbell.org_machines.yaml`
+
+The `amt.tinkerbell.org_*.yaml` CRDs are this repo's own, generated from
+`api/amt/v1alpha1`. Refresh them with `make generate` and copy from
+`api/amt/v1alpha1/crds/`.

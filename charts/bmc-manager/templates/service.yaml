@@ -1,0 +1,17 @@
+{{- if .Values.redfish.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "bmc-manager.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "bmc-manager.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.redfish.service.type }}
+  selector:
+    {{- include "bmc-manager.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: redfish
+      port: {{ .Values.redfish.port }}
+      targetPort: redfish
+{{- end }}

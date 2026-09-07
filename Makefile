@@ -16,7 +16,7 @@ ENVTEST_K8S_VERSION ?= 1.37.0
 .PHONY: test-envtest
 test-envtest:
 	KUBEBUILDER_ASSETS="$$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.24 use $(ENVTEST_K8S_VERSION) -p path)" \
-		CGO_ENABLED=1 go test -race -tags envtest -run 'TestEnvtest' ./internal/sync/... ./internal/janitor/... ./internal/resolve/... ./internal/upgrade/...
+		CGO_ENABLED=1 go test -race -tags envtest -run 'TestEnvtest' ./internal/sync/... ./internal/janitor/... ./internal/resolve/... ./internal/upgrade/... ./internal/amtenroll/...
 
 .PHONY: vet
 vet:
@@ -63,6 +63,9 @@ components:
 	@echo "---" >> dist/runtime-extensions-components.yaml
 	helm template tinkerbell-bmc-discovery-controller charts/tinkerbell-bmc-discovery-controller \
 		--namespace $(COMPONENTS_NAMESPACE) >> dist/runtime-extensions-components.yaml
+	@echo "---" >> dist/runtime-extensions-components.yaml
+	helm template bmc-manager charts/bmc-manager \
+		--namespace $(COMPONENTS_NAMESPACE) --include-crds >> dist/runtime-extensions-components.yaml
 	@echo "rendered dist/runtime-extensions-components.yaml"
 
 # metadata.yaml sanity: the clusterctl contract must match the cluster-api
