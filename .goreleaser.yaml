@@ -32,6 +32,18 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser
       - -extldflags '-static'
+  - id: bmc-manager
+    env: ["CGO_ENABLED=0"]
+    main: ./cmd/bmc-manager
+    binary: manager
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser
+      - -extldflags '-static'
 
 # Render the single clusterctl components artifact alongside the binaries.
 before:
@@ -88,6 +100,23 @@ dockers_v2:
     labels:
       "org.opencontainers.image.created": "{{.Date}}"
       "org.opencontainers.image.name": "tinkerbell-bmc-discovery-controller"
+      "org.opencontainers.image.revision": "{{.FullCommit}}"
+      "org.opencontainers.image.version": "{{.Version}}"
+      "org.opencontainers.image.source": "{{.GitURL}}"
+  - id: bmc-manager
+    ids: ["bmc-manager"]
+    dockerfile: Dockerfile
+    extra_files:
+      - LICENSE
+    images:
+      - "{{ .Env.REGISTRY }}/tinkerbell-community/bmc-manager"
+    tags:
+      - '{{ if eq .Env.IS_RELEASE "true" }}{{ .Version }}{{ end }}'
+      - "{{ if not .IsNightly }}latest{{ end }}"
+      - '{{ if eq .Branch "main" }}sha-{{ .ShortCommit }}{{ end }}'
+    labels:
+      "org.opencontainers.image.created": "{{.Date}}"
+      "org.opencontainers.image.name": "bmc-manager"
       "org.opencontainers.image.revision": "{{.FullCommit}}"
       "org.opencontainers.image.version": "{{.Version}}"
       "org.opencontainers.image.source": "{{.GitURL}}"
