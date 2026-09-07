@@ -102,7 +102,7 @@ type HardwareOptions struct {
 // inventory, following the conventions of hand-provisioned Hardware:
 // agentID and metadata.instance.id are the primary in-band MAC (serial only
 // when no MAC is known) and the primary interface carries the DHCP hostname.
-// live carries the existing netboot values forward (see netbootFor); pass
+// live carries the existing netboot values forward (see NetbootFor); pass
 // nil on create.
 func DesiredHardware(dev *common.Device, opts HardwareOptions, live *tinkv1.Hardware) *tinkv1.Hardware {
 	instanceID := PrimaryMAC(dev)
@@ -135,7 +135,7 @@ func DesiredHardware(dev *common.Device, opts HardwareOptions, live *tinkv1.Hard
 	// whole list and must carry foreign netboot state forward inside it.
 	if mac := PrimaryMAC(dev); mac != "" {
 		spec.Interfaces = []tinkv1.Interface{{
-			Netboot: netbootFor(live),
+			Netboot: NetbootFor(live),
 			DHCP:    &tinkv1.DHCP{MAC: mac, Hostname: opts.Name},
 		}}
 	}
@@ -151,13 +151,13 @@ func DesiredHardware(dev *common.Device, opts HardwareOptions, live *tinkv1.Hard
 	}
 }
 
-// netbootFor implements the netboot carry-forward rule: discovery authors
+// NetbootFor implements the netboot carry-forward rule: discovery authors
 // allowPXE/allowWorkflow defaults at create only and never changes netboot
 // afterward — the tink workflow controller owns PXE arming during workflow
 // runs, and discovery's apply must not undo its allowPXE=false disarm. On
 // update the live primary interface's netboot is serialized verbatim
 // (ownership without authorship, forced by the atomic interfaces list).
-func netbootFor(live *tinkv1.Hardware) *tinkv1.Netboot {
+func NetbootFor(live *tinkv1.Hardware) *tinkv1.Netboot {
 	if live != nil && len(live.Spec.Interfaces) > 0 && live.Spec.Interfaces[0].Netboot != nil {
 		return live.Spec.Interfaces[0].Netboot.DeepCopy()
 	}

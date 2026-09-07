@@ -219,8 +219,8 @@ func TestDesiredHardwareSparse(t *testing.T) {
 // defaults on create, the live values — including an explicit false —
 // reproduced verbatim on update.
 func TestNetbootCarryForward(t *testing.T) {
-	if nb := netbootFor(nil); nb.AllowPXE == nil || !*nb.AllowPXE || nb.AllowWorkflow == nil || !*nb.AllowWorkflow {
-		t.Errorf("netbootFor(nil) = %+v, want create defaults true/true", nb)
+	if nb := NetbootFor(nil); nb.AllowPXE == nil || !*nb.AllowPXE || nb.AllowWorkflow == nil || !*nb.AllowWorkflow {
+		t.Errorf("NetbootFor(nil) = %+v, want create defaults true/true", nb)
 	}
 
 	live := &tinkv1.Hardware{Spec: tinkv1.HardwareSpec{
@@ -228,16 +228,16 @@ func TestNetbootCarryForward(t *testing.T) {
 			Netboot: &tinkv1.Netboot{AllowPXE: ptr.To(false), AllowWorkflow: ptr.To(true)},
 		}},
 	}}
-	nb := netbootFor(live)
+	nb := NetbootFor(live)
 	if nb.AllowPXE == nil || *nb.AllowPXE || nb.AllowWorkflow == nil || !*nb.AllowWorkflow {
-		t.Errorf("netbootFor(live) = %+v, want allowPXE false carried forward", nb)
+		t.Errorf("NetbootFor(live) = %+v, want allowPXE false carried forward", nb)
 	}
 	if nb == live.Spec.Interfaces[0].Netboot {
 		t.Error("netbootFor must deep-copy, not alias, the live netboot")
 	}
 
 	noNetboot := &tinkv1.Hardware{Spec: tinkv1.HardwareSpec{Interfaces: []tinkv1.Interface{{}}}}
-	if nb := netbootFor(noNetboot); nb.AllowPXE == nil || !*nb.AllowPXE {
-		t.Errorf("netbootFor(no netboot) = %+v, want create defaults", nb)
+	if nb := NetbootFor(noNetboot); nb.AllowPXE == nil || !*nb.AllowPXE {
+		t.Errorf("NetbootFor(no netboot) = %+v, want create defaults", nb)
 	}
 }

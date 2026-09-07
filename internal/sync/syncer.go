@@ -88,7 +88,7 @@ func (s *Syncer) Sync(ctx context.Context, ep mdns.Endpoint, dev *common.Device,
 		if !ok || len(hardware.Spec.Interfaces) == 0 {
 			return
 		}
-		hardware.Spec.Interfaces[0].Netboot = netbootFor(lh)
+		hardware.Spec.Interfaces[0].Netboot = NetbootFor(lh)
 	}
 	if err := s.applyManaged(ctx, "hardware", &tinkv1.Hardware{}, hardware, ep, carry); err != nil {
 		return fmt.Errorf("syncing hardware %s: %w", name, err)
