@@ -440,6 +440,22 @@ not an optional ecosystem nicety.
 > still resolve. **The body change and the ref bump must land in the same chart change**, or machines
 > silently stay on the old Template.
 
+
+> **2026-09-07 update — the Template stamps `talos.config` and networking itself.** The shipped
+> body now runs two tinkerbell-community actions after `image2disk`: `taloscmdline` rewrites the
+> `.cmdline` sections of the UKI on the EFI partition (`EFI/Linux/Talos-*.efi`, default boot and
+> reset profile) with `net.ifnames=0 talos.config=<tootles user-data URL>`, and `talosmeta` writes
+> the Talos platform network configuration (address, gateway, DNS, NTP, hostname from
+> `Hardware.spec.interfaces[].dhcp` and `metadata.instance`) to META key `0xa`. The URL is a
+> Helm-side substitution from `resolver.tootlesURL` / `resolver.tinkerbellIP` (same derivation as
+> `resolve.TootlesUserDataURL`), the action images come from `template.actions.{repository,tag}`, and
+> the Hardware data reaches `talosmeta` through `HARDWARE_SPEC`, rendered from the `.hardware`
+> template key (`dig` for absent fields; only `interfaces` and `metadata.instance`, never
+> `userData`). Consequence for §3.2: the raw image no longer has to carry `talos.config`; the
+> resolver may keep baking it (the action replaces the key, so both agree) or drop it, which makes
+> the schematic environment-agnostic. `net.ifnames=0` stays the contract in both places because the
+> META link names are resolved with `LINK_NAMING=kernel`.
+
 ### 3.7 Terraform → extension handover, and the mandatory Workflow-CREATE gate
 
 The **writer** predicates are disjoint by construction — the resolver writes only claimed Hardware,

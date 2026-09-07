@@ -90,6 +90,15 @@ template:
   # Namespace the Template CR lands in — the namespace CAPT resolves
   # templateRef against (the Hardware/Workflow namespace). Must exist.
   namespace: tinkerbell
+  # Images of the tinkerbell-community actions the template runs after
+  # image2disk: taloscmdline (sets talos.config in the UKI kernel command
+  # line) and talosmeta (writes the network configuration to META). The
+  # actions Release workflow tags every image with the git commit SHA as well
+  # as latest; pin the SHA for reproducible Templates (the CR name is
+  # content-addressed, so a tag change ships a new Template object).
+  actions:
+    repository: ghcr.io/tinkerbell-community/actions
+    tag: latest
 
 clusterClass:
   # Ship the EKS-style Talos ClusterClass flavor + the ExtensionConfig that

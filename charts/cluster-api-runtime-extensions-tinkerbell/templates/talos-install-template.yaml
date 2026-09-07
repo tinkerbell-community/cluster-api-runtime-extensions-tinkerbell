@@ -2,7 +2,10 @@
 {{- /*
 The talos-install Workflow Template, moved out of terraform (spec §3.6). The
 body lives in files/ so Helm never interprets the tink workflow-controller's
-own {{ .Hardware.* }} directives, and the CR name is content-addressed: a body
+own {{ .Hardware.* }} directives; the only Helm-side substitutions are the
+__PLACEHOLDER__ tokens below (deploy-level values: the tootles user-data URL
+the taloscmdline action writes as talos.config, and the actions registry/tag).
+The CR name is content-addressed over the substituted body: a body OR value
 change ships a NEW Template object, never mutates one in place — Workflows
 render once, so an in-place mutation would silently affect only future
 machines and drift from provisioned ones. Consumers pin the body they were
@@ -10,7 +13,10 @@ provisioned against via templateRef; a ref bump is a deliberate, controlled
 template change. IMG_URL builds entirely from the resolver-written
 Hardware.spec.metadata.instance.operating_system {slug,version,os_slug}.
 */}}
-{{- $body := .Files.Get "files/talos-install-template.yaml" }}
+{{- $body := .Files.Get "files/talos-install-template.yaml"
+  | replace "__TOOTLES_USER_DATA_URL__" (include "carext.tootlesUserDataURL" .)
+  | replace "__ACTIONS_REPOSITORY__" (required "template.actions.repository is required" .Values.template.actions.repository)
+  | replace "__ACTIONS_TAG__" (required "template.actions.tag is required" .Values.template.actions.tag) }}
 apiVersion: tinkerbell.org/v1alpha1
 kind: Template
 metadata:

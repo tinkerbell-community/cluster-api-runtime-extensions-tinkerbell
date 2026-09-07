@@ -10,10 +10,9 @@ tasks:
       - /lib/firmware:/lib/firmware:ro
     actions:
       # Stream the Factory's raw metal image straight onto the install disk
-      # rather than running `installer install`. The image already carries the
-      # kernel cmdline this cluster needs -- including talos.config -- baked in
-      # by the schematic (modules/data-lookup/modules/images), so there is
-      # nothing to patch afterwards.
+      # rather than running `installer install`. The image is
+      # environment-agnostic: the two actions after it stamp the machine and
+      # environment specific bits (talos.config, network) onto the disk.
       #
       # OsSlug is "talos-<version>-<arch>", so the last dash-separated field is
       # the architecture the Factory names the image after.
@@ -34,6 +33,36 @@ tasks:
           RETRY_ENABLED: "true"
           RETRY_DURATION_MINUTES: "10"
           TEXT_LOGGING: "true"
+
+      # Point the node at tootles for its machine configuration by setting
+      # talos.config in the kernel command line of the UKI the image ships
+      # (EFI/Linux/Talos-*.efi on the EFI partition; both the default boot and
+      # the reset profile are updated). The URL is deploy-level and injected by
+      # the chart from resolver.tootlesURL / resolver.tinkerbellIP, so the
+      # Factory schematic no longer has to bake it into the image.
+      # net.ifnames=0 keeps kernel interface names (eth0), matching what the
+      # schematic has always set and what the META action below assumes.
+      - name: "Set kernel arguments"
+        image: __ACTIONS_REPOSITORY__/taloscmdline:__ACTIONS_TAG__
+        timeout: 300
+        environment:
+          DEST_DISK: "{{ index .Hardware.Disks 0 }}"
+          KERNEL_ARGS: "net.ifnames=0 talos.config=__TOOTLES_USER_DATA_URL__"
+
+      # Give the node its addressing before it can fetch a config: the static
+      # address, gateway, DNS and NTP from Hardware.spec.interfaces[].dhcp
+      # become Talos platform network configuration in META key 0xa. The
+      # Hardware data is rendered straight from the Workflow template
+      # (.hardware is the Hardware object by JSON field names); dig tolerates
+      # absent fields and only interfaces plus metadata.instance are passed,
+      # so spec.userData never leaves the Hardware object.
+      - name: "Write network configuration to META"
+        image: __ACTIONS_REPOSITORY__/talosmeta:__ACTIONS_TAG__
+        timeout: 120
+        environment:
+          DEST_DISK: "{{ index .Hardware.Disks 0 }}"
+          LINK_NAMING: kernel
+          HARDWARE_SPEC: {{ dict "interfaces" (dig "interfaces" (list) .hardware.spec) "metadata" (dict "instance" (dict "hostname" (dig "metadata" "instance" "hostname" "" .hardware.spec) "ips" (dig "metadata" "instance" "ips" (list) .hardware.spec))) | toJson | quote }}
 
       # waitdaemon reports success to tink immediately, then respawns itself
       # to wait WAIT_SECONDS and finally runs IMAGE with this action's own
