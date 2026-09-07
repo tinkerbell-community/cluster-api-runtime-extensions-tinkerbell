@@ -1,0 +1,173 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: amtprofiles.amt.tinkerbell.org
+spec:
+  group: amt.tinkerbell.org
+  names:
+    kind: AMTProfile
+    listKind: AMTProfileList
+    plural: amtprofiles
+    shortNames:
+    - amtp
+    singular: amtprofile
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.controlMode
+      name: Control Mode
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: AMTProfile is fleet-wide Intel AMT policy.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AMTProfileSpec is fleet-wide AMT policy.
+            properties:
+              consent:
+                description: |-
+                  Consent sets IPS_OptInService.OptInRequired. Ignored outside Admin
+                  Control Mode.
+                enum:
+                - None
+                - KVM
+                - All
+                type: string
+              controlMode:
+                default: Best
+                description: |-
+                  ControlMode is the control mode the fleet should aim for. It is
+                  currently advisory: v1 does not activate devices, so the mode is
+                  whatever onboarding produced. It is reported back in
+                  AMTDevice.status.controlMode.
+                enum:
+                - Best
+                - Admin
+                - Client
+                type: string
+              credentialSources:
+                description: |-
+                  CredentialSources is an ordered list of Secrets holding candidate
+                  username/password pairs. The controller pivots through them in order,
+                  verifying each with a real WS-Man session, and records the pair that
+                  worked in a per-device Secret.
+                items:
+                  description: |-
+                    SecretReference represents a Secret Reference. It has enough information to retrieve secret
+                    in any namespace
+                  properties:
+                    name:
+                      description: name is unique within a namespace to reference
+                        a secret resource.
+                      type: string
+                    namespace:
+                      description: namespace defines the space within which the secret
+                        name must be unique.
+                      type: string
+                  type: object
+                  x-kubernetes-map-type: atomic
+                type: array
+              password:
+                description: Password governs generated admin passwords.
+                properties:
+                  length:
+                    default: 24
+                    description: Length of generated passwords.
+                    format: int32
+                    maximum: 32
+                    minimum: 8
+                    type: integer
+                  rotation:
+                    description: |-
+                      Rotation is how often to rotate the admin password. Zero disables
+                      rotation.
+
+                      Rotation writes the new password over WS-Man and then verifies it. The
+                      old password is dead the moment the write lands, so the per-device
+                      Secret retains previousPassword and the connection path tries both. A
+                      half-failed rotation self-corrects on the next reconcile.
+                    type: string
+                type: object
+              redirection:
+                description: Redirection governs AMT_RedirectionService.
+                properties:
+                  ider:
+                    description: |-
+                      IDER enables IDE redirection. Note that AMT 11 and later use USB-R for
+                      the storage data plane; this flag only controls the firmware capability
+                      bit, and this project does not implement a storage redirection client.
+                    type: boolean
+                  listenerEnabled:
+                    description: |-
+                      ListenerEnabled opens the redirection listener. Without it SOL is
+                      unreachable even when enabled.
+                    type: boolean
+                  sol:
+                    description: SOL enables Serial-over-LAN.
+                    type: boolean
+                type: object
+              timeSync:
+                default: true
+                description: TimeSync keeps AMT's clock aligned with the controller.
+                type: boolean
+              tls:
+                description: TLS governs the controller's transport to AMT.
+                properties:
+                  mode:
+                    default: Pin
+                    description: Mode selects certificate handling.
+                    enum:
+                    - Pin
+                    - Insecure
+                    type: string
+                type: object
+              virtualMedia:
+                description: VirtualMedia governs OCR UEFI HTTPS boot.
+                properties:
+                  enabled:
+                    default: true
+                    description: |-
+                      Enabled exposes Redfish VirtualMedia for devices whose firmware reports
+                      ForceUEFIHTTPSBoot. Devices without it never get a VirtualMedia
+                      resource.
+                    type: boolean
+                  enforceSecureBoot:
+                    default: false
+                    description: EnforceSecureBoot requires the boot image to be signed.
+                    type: boolean
+                  imageBaseURL:
+                    description: |-
+                      ImageBaseURL is the HTTPS base URL of the boot image server. AMT fetches
+                      the image itself, so this must be reachable from the device and present
+                      a certificate AMT trusts.
+                    type: string
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources: {}

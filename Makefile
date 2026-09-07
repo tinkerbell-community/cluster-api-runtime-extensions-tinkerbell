@@ -29,6 +29,8 @@ CONTROLLER_GEN_VERSION ?= v0.19.0
 generate:
 	go run sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION) object paths="./api/v1alpha1/..."
 	go run sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION) crd paths="./api/v1alpha1/..." output:crd:artifacts:config=api/v1alpha1/crds
+	go run sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION) object paths="./api/amt/v1alpha1/..."
+	go run sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION) crd paths="./api/amt/v1alpha1/..." output:crd:artifacts:config=api/amt/v1alpha1/crds
 
 .PHONY: fmt-check
 fmt-check:
