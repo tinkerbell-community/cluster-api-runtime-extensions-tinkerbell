@@ -5,7 +5,7 @@ platforms) as first-class BMCs: it discovers them, collects inventory, holds
 their credentials, registers them as Tinkerbell `Machine` + `Hardware`, and
 exposes the fleet through a DMTF Redfish aggregator.
 
-Design date: 2026-09-07. Status: implementation in progress.
+Design date: 2026-09-07. Status: implemented on branch `bmc-manager`.
 
 This document is the decision record. Every claim marked **measured** was
 verified against a live device (ASUS NUC15CRHV7, AMT 18.1.18) during design;
@@ -95,16 +95,23 @@ from a live USB or the pre-wipe OS. The controller then:
 - **discovers credentials** by pivoting an ordered list of candidate Secrets and
   verifying each with a real WS-Man session — the same pattern
   `cmd/bmc-discovery` already uses;
-- **rotates** the admin password over the network via
+- **can rotate** the admin password over the network via
   `AMT_AuthorizationService.SetAdminAclEntryEx(username, digestPassword)`, where
   `digestPassword = MD5(user:realm:pass)` and `realm` comes from
   `AMT_GeneralSettings.DigestRealm`.
 
-Rotation has an unavoidable window: once the write lands the old password is
-dead, so a failed verification afterwards is ambiguous. The per-device Secret
-therefore carries **`password` and `previousPassword`**, and the connection path
-tries current then previous. A half-failed rotation self-corrects on the next
-reconcile instead of locking the controller out.
+**Rotation is a capability, not yet a behaviour.** `pkg/amt.SetAdminPassword` is
+implemented and unit-tested, and `status.digestRealm` is recorded so it can be
+called, but the reconciler does not invoke it: `AMTProfile.password.rotation`
+and `status.lastRotatedTime` are inert in this release. The plumbing that makes
+rotation *safe* is in place, which is the part worth getting right first.
+
+That plumbing matters because rotation has an unavoidable window: once the write
+lands the old password is dead, so a failed verification afterwards is
+ambiguous. The per-device Secret carries **`password` and `previousPassword`**,
+and the credential pivot tries current then previous, so a half-failed rotation
+converges on the next reconcile instead of locking the controller out. Enable
+rotation only after exercising it on a spare device.
 
 **Remaining physical-access case:** a device whose password is in neither the
 Secret nor any candidate list.
@@ -250,10 +257,38 @@ surface; if it is down, provisioning continues.
 | client → aggregator | Redfish `SessionService` + Basic over TLS |
 | AMT → image server | AMT verifies the image server against the root pushed to it |
 
+## What is built
+
+| Component | State |
+|---|---|
+| `pkg/amt` | Facts, CIM inventory to `common.Device`, power, one-shot boot override, UEFI HTTPS virtual media, password set, certificate pinning. Validated against live hardware. |
+| `api/amt/v1alpha1` | `AMTDevice`, `AMTProfile`, generated CRDs |
+| `internal/amtenroll` | Reconciler: profile resolution, credential pivot, facts and inventory into status, Machine + Hardware registration under its own SSA field manager |
+| `internal/redfish` | Aggregator (ServiceRoot, Systems, Chassis, Managers, VirtualMedia, AggregationService) and the boot image server |
+| `cmd/bmc-manager` | Manager binary, goreleaser build and image |
+| `charts/bmc-manager` | Chart, split RBAC, default `AMTProfile`, wired into `make components` |
+
+Tests: unit coverage for every package, five envtest cases against a real API
+server for the SSA guarantees, and read-only integration tests against a live
+device gated on `AMT_HOST`.
+
+## Deliberately not built
+
+- **Activation** (D8). Devices are onboarded out of band with `rpc-go`.
+- **Password rotation**, per above.
+- **Reconciling `AMTProfile` onto devices.** The profile's redirection, consent
+  and time-sync policy is recorded and served but not yet applied to hardware;
+  `IPS_OptInService.OptInRequired` can be set to 0 in ACM for consent-free KVM,
+  and is exposed in the CRD for that purpose.
+- **SSDP** (D11).
+
 ## Open items
 
 - **E1/E2** above, gating the deferred activation path.
-- Password rotation is implemented but should be exercised on a spare device
-  before being enabled fleet-wide.
-- `IPS_OptInService.OptInRequired` can be set to 0 in ACM for consent-free KVM;
-  exposed in `AMTProfile` but not yet reconciled.
+- `make components` fails on the pre-existing
+  `cluster-api-runtime-extensions-tinkerbell` chart, which requires
+  `resolver.tootlesURL` or `resolver.tinkerbellIP`. This predates bmc-manager;
+  the bmc-manager chart renders cleanly on its own.
+- The Redfish service UUID has no default. It is omitted when unset rather than
+  emitted blank, but a stable value should be configured so clients see a
+  consistent service identity across restarts.

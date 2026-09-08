@@ -101,10 +101,11 @@ func (s *KubeStore) resourceFor(ctx context.Context, id string) (*amtv1.AMTDevic
 	if err := s.Client.List(ctx, list, client.InNamespace(s.Namespace)); err != nil {
 		return nil, fmt.Errorf("listing AMTDevices: %w", err)
 	}
+	// The admission rule must match deviceFrom exactly: a device that Get
+	// returns but Connect cannot find would appear in the aggregator with
+	// every action failing as unreachable, which is a confusing way to say
+	// "inventory has not been collected yet".
 	for i := range list.Items {
-		if list.Items[i].Status.Inventory == nil {
-			continue
-		}
 		if platformGUIDOf(&list.Items[i]) == id {
 			return &list.Items[i], nil
 		}

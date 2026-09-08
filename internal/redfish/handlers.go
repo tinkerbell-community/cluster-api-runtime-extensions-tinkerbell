@@ -41,19 +41,24 @@ func (s *Server) versions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) serviceRoot(w http.ResponseWriter, r *http.Request) {
-	s.writeJSON(w, r, http.StatusOK, map[string]any{
+	body := map[string]any{
 		odataType:            "#ServiceRoot.v1_15_0.ServiceRoot",
 		odataIDKey:           Base,
 		"Id":                 "RootService",
 		keyName:              "Intel AMT Redfish Aggregator",
 		"RedfishVersion":     "1.15.0",
-		"UUID":               s.ServiceUUID,
 		"Systems":            link(odataID("Systems")),
 		"Chassis":            link(odataID("Chassis")),
 		"Managers":           link(odataID("Managers")),
 		"AggregationService": link(odataID("AggregationService")),
 		keyLinks:             map[string]any{},
-	})
+	}
+	// An empty UUID is not a valid Redfish service identity, so the property
+	// is omitted rather than emitted blank when none is configured.
+	if s.ServiceUUID != "" {
+		body["UUID"] = s.ServiceUUID
+	}
+	s.writeJSON(w, r, http.StatusOK, body)
 }
 
 // collection renders a Redfish collection. Members are links only, which is

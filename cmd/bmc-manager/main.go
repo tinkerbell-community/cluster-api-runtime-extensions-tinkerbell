@@ -87,7 +87,7 @@ func (c *config) bindFlags(fs *flag.FlagSet) {
 	fs.BoolVar(&c.autoEnrollment, "auto-enrollment", false, "Enable Tinkerbell auto enrollment on created Hardware.")
 	fs.BoolVar(&c.redfishEnabled, "redfish", true, "Serve the Redfish aggregator.")
 	fs.StringVar(&c.redfishAddr, "redfish-bind-address", ":8443", "Redfish aggregator bind address.")
-	fs.StringVar(&c.serviceUUID, "redfish-service-uuid", "", "Stable UUID advertised in the Redfish service root. Generated per start when empty, which makes the service appear to change identity across restarts.")
+	fs.StringVar(&c.serviceUUID, "redfish-service-uuid", "", "Stable UUID advertised in the Redfish service root. Omitted when empty; set it so clients see a consistent service identity across restarts.")
 	fs.BoolVar(&c.enforceSecureBoot, "enforce-secure-boot", false, "Require virtual-media boot images to be signed.")
 	fs.StringVar(&c.imageRoot, "image-root", "", "Directory of boot images served for UEFI HTTPS boot. Empty disables the image server.")
 	fs.StringVar(&c.imageBaseURL, "image-base-url", "", "External https:// base URL of the image server, as reachable from devices.")

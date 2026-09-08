@@ -539,6 +539,51 @@ func TestChassisAndManager(t *testing.T) {
 	}
 }
 
+// Get and Connect must admit exactly the same devices. A device Get returns
+// but Connect cannot find would appear in the aggregator with every action
+// failing as unreachable.
+func TestStoreAdmissionIsConsistent(t *testing.T) {
+	t.Parallel()
+
+	// A device that is verified but whose inventory has not been collected.
+	dev := testDevice()
+	dev.Manufacturer, dev.Model, dev.SerialNumber = "", "", ""
+	store := &fakeStore{devices: []Device{dev}, client: &fakeClient{powerState: "On"}}
+	srv := newTestServer(t, store)
+
+	if status, _ := get(t, srv, Base+"/Systems/"+testID); status != http.StatusOK {
+		t.Fatalf("system status = %d, want 200 for a device without inventory", status)
+	}
+	// And an action against it must reach the device rather than 404/503.
+	if status := send(t, srv, http.MethodPost,
+		Base+"/Systems/"+testID+"/Actions/ComputerSystem.Reset",
+		`{"ResetType":"On"}`); status != http.StatusNoContent {
+		t.Errorf("reset status = %d, want 204", status)
+	}
+}
+
+// An empty UUID is not a valid Redfish service identity.
+func TestServiceRootOmitsEmptyUUID(t *testing.T) {
+	t.Parallel()
+
+	s := &Server{
+		Store: &fakeStore{},
+		Log:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	srv := httptest.NewServer(s.Handler())
+	t.Cleanup(srv.Close)
+
+	_, body := get(t, srv, Base)
+	if _, present := body["UUID"]; present {
+		t.Error("service root emitted a UUID property with no UUID configured")
+	}
+
+	_, body = get(t, newTestServer(t, &fakeStore{}), Base)
+	if body["UUID"] != "00000000-0000-0000-0000-000000000001" {
+		t.Errorf("UUID = %v, want the configured value", body["UUID"])
+	}
+}
+
 func TestODataVersionHeader(t *testing.T) {
 	t.Parallel()
 

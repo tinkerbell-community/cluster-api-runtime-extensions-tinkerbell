@@ -31,6 +31,43 @@ Redfish, and manages [Tinkerbell](https://tinkerbell.org) resources from it:
 No new CRDs are introduced; the controller only manages existing Tinkerbell
 types.
 
+## Intel AMT BMCs (`cmd/bmc-manager`)
+
+Intel AMT devices (Intel NUCs and similar vPro platforms) are invisible to the
+mDNS discovery controller: they advertise neither mDNS nor SSDP, and they speak
+WS-Management rather than Redfish. `cmd/bmc-manager` manages them instead.
+
+```text
+ AMT device                bmc-manager                        clients
+ (WS-Man 16993) ◄──────── enroll reconciler
+                           │  verify credentials
+                           │  collect CIM inventory
+                           │  register Machine + Hardware
+                           └─ redfish aggregator :8443 ◄──────┘
+                              + boot image server
+```
+
+- **`AMTDevice`** (`amt.tinkerbell.org/v1alpha1`) — one per machine: endpoint,
+  credentials, and observed status (control mode, firmware, boot capabilities,
+  inventory, pinned TLS fingerprint).
+- **`AMTProfile`** (cluster-scoped) — fleet-wide policy.
+
+Power and PXE do **not** go through the aggregator: rufio drives them through
+bmclib's IntelAMT provider directly, so provisioning continues if the
+aggregator is down. The aggregator is a north-facing API surface that also
+provides what bmclib cannot — inventory and virtual media.
+
+Devices are onboarded once, out of band, with
+[`rpc-go`](https://github.com/device-management-toolkit/rpc-go): AMT is not
+activated from the factory, and this release does not activate it. An
+unprovisioned device is reported through an `AMTDevice` condition rather than
+skipped, so a newly racked machine is visible rather than absent.
+
+Virtual media uses **OCR UEFI HTTPS boot** — AMT fetches the image itself from
+the built-in image server — and is advertised only on devices whose firmware
+reports that capability. See [docs/bmc-manager.md](docs/bmc-manager.md) for the
+design and the measurements behind it, including why IDER was rejected.
+
 ## How it works
 
 ```text
