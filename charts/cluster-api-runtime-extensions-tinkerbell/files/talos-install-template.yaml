@@ -9,60 +9,34 @@ tasks:
       - /dev/console:/dev/console
       - /lib/firmware:/lib/firmware:ro
     actions:
-      # Stream the Factory's raw metal image straight onto the install disk
-      # rather than running `installer install`. The image is
-      # environment-agnostic: the two actions after it stamp the machine and
-      # environment specific bits (talos.config, network) onto the disk.
+      # talos2disk performs the whole install: it selects the disk with a
+      # Talos-shaped selector, determines and registers the Image Factory
+      # schematic from the machine and the Hardware annotations, streams the
+      # raw metal image, stamps KERNEL_ARGS into the UKI command lines, writes
+      # the network configuration to META and records the installer image and
+      # configuration overrides on the Hardware through KUBECONFIG.
       #
-      # OsSlug is "talos-<version>-<arch>", so the last dash-separated field is
-      # the architecture the Factory names the image after.
-      - name: "Write Talos image"
-        image: quay.io/tinkerbell/actions/image2disk:latest
+      # HARDWARE is the whole Hardware object by JSON field names (.hardware),
+      # including spec.userData and status.attributes.outOfBand, with the bulky
+      # object metadata trimmed to name, namespace, labels and annotations.
+      # Single-quoted or Go-quoted: the workflow controller runs the Go template
+      # over the raw file text before any YAML parsing.
+      - name: "Install Talos"
+        image: __ACTIONS_REPOSITORY__/talos2disk:__ACTIONS_TAG__
         timeout: 9600
         namespaces:
           network: host
+        volumes:
+          - /var/lib/tink/shared:/shared
         environment:
-          # Single-quoted: the workflow controller runs the Go template over the
-          # raw file text before any YAML parsing, so a YAML \" escape would reach
-          # the template parser as a stray backslash and fail to parse.
-          IMG_URL: 'https://factory.talos.dev/image/{{ .Hardware.Metadata.Instance.OperatingSystem.Slug }}/{{ .Hardware.Metadata.Instance.OperatingSystem.Version }}/metal-{{ .Hardware.Metadata.Instance.OperatingSystem.OsSlug | splitList "-" | last }}.raw.zst'
-          DEST_DISK: "{{ index .Hardware.Disks 0 }}"
-          COMPRESSED: "true"
-          # Factory pulls have been intermittent from this network; retry rather
-          # than failing the whole workflow on a single transport hiccup.
-          RETRY_ENABLED: "true"
-          RETRY_DURATION_MINUTES: "10"
-          TEXT_LOGGING: "true"
-
-      # Point the node at tootles for its machine configuration by setting
-      # talos.config in the kernel command line of the UKI the image ships
-      # (EFI/Linux/Talos-*.efi on the EFI partition; both the default boot and
-      # the reset profile are updated). The URL is deploy-level and injected by
-      # the chart from resolver.tootlesURL / resolver.tinkerbellIP, so the
-      # Factory schematic no longer has to bake it into the image.
-      # net.ifnames=0 keeps kernel interface names (eth0), matching what the
-      # schematic has always set and what the META action below assumes.
-      - name: "Set kernel arguments"
-        image: __ACTIONS_REPOSITORY__/taloscmdline:__ACTIONS_TAG__
-        timeout: 300
-        environment:
-          DEST_DISK: "{{ index .Hardware.Disks 0 }}"
-          KERNEL_ARGS: "net.ifnames=0 talos.config=__TOOTLES_USER_DATA_URL__"
-
-      # Give the node its addressing before it can fetch a config: the static
-      # address, gateway, DNS and NTP from Hardware.spec.interfaces[].dhcp
-      # become Talos platform network configuration in META key 0xa. The
-      # Hardware data is rendered straight from the Workflow template
-      # (.hardware is the Hardware object by JSON field names); dig tolerates
-      # absent fields and only interfaces plus metadata.instance are passed,
-      # so spec.userData never leaves the Hardware object.
-      - name: "Write network configuration to META"
-        image: __ACTIONS_REPOSITORY__/talosmeta:__ACTIONS_TAG__
-        timeout: 120
-        environment:
-          DEST_DISK: "{{ index .Hardware.Disks 0 }}"
-          LINK_NAMING: kernel
-          HARDWARE_SPEC: {{ dict "interfaces" (dig "interfaces" (list) .hardware.spec) "metadata" (dict "instance" (dict "hostname" (dig "metadata" "instance" "hostname" "" .hardware.spec) "ips" (dig "metadata" "instance" "ips" (list) .hardware.spec))) | toJson | quote }}
+          HARDWARE: {{ dict "metadata" (pick .hardware.metadata "name" "namespace" "labels" "annotations") "spec" .hardware.spec "status" (dig "status" (dict) .hardware) | toJson | quote }}
+          # Deploy-level kernel arguments. talos.config points the node at
+          # tootles for its machine configuration; net.ifnames=0 keeps kernel
+          # interface names (eth0) and talos2disk infers META link naming from it.
+          KERNEL_ARGS: "console=tty0 console=ttyAMA0,115200 net.ifnames=0 talos.config=__TOOTLES_USER_DATA_URL__"
+          # Kubeconfig provisioned on the OSIE host; needs get and patch on
+          # hardware.tinkerbell.org. Without it the write-back is skipped.
+          KUBECONFIG: /shared/kubeconfig
 
       # waitdaemon reports success to tink immediately, then respawns itself
       # to wait WAIT_SECONDS and finally runs IMAGE with this action's own

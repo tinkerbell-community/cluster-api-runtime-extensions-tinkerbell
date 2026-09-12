@@ -456,6 +456,18 @@ not an optional ecosystem nicety.
 > the schematic environment-agnostic. `net.ifnames=0` stays the contract in both places because the
 > META link names are resolved with `LINK_NAMING=kernel`.
 
+
+> **2026-09-12 update — one install action.** The body now runs the sidero-community
+> `talos2disk` action followed by the reboot. talos2disk receives the whole Hardware object as
+> `HARDWARE` (`.hardware | toJson`, including `spec.userData` and `status.attributes.outOfBand`),
+> selects the disk with a Talos-shaped selector, registers its own Factory schematic from machine
+> detection plus the `talos.tinkerbell.org/system-extensions` annotation, streams the raw image,
+> stamps `KERNEL_ARGS`, writes META, and patches the Hardware through `KUBECONFIG` with
+> `talos.tinkerbell.org/installer-image`, `talos.tinkerbell.org/config-patch`,
+> `talos.tinkerbell.org/userdata-owner: talos2disk` and the rewritten `spec.userData`. The Template
+> no longer reads `operating_system`; the Workflow gate remains as the guarantee that a version
+> reaches the machine. CAPT yields `spec.userData` and the resolver yields `installer-image` when the
+> owner annotation is present (see the talos2disk design spec in sidero-community/actions).
 ### 3.7 Terraform → extension handover, and the mandatory Workflow-CREATE gate
 
 The **writer** predicates are disjoint by construction — the resolver writes only claimed Hardware,
