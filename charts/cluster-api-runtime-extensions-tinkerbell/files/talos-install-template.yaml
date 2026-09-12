@@ -10,11 +10,11 @@ tasks:
       - /lib/firmware:/lib/firmware:ro
     actions:
       # talos2disk performs the whole install: it selects the disk with a
-      # Talos-shaped selector, determines and registers the Image Factory
-      # schematic from the machine and the Hardware annotations, streams the
-      # raw metal image, stamps KERNEL_ARGS into the UKI command lines, writes
-      # the network configuration to META and records the installer image and
-      # configuration overrides on the Hardware through KUBECONFIG.
+      # Talos-shaped selector, streams the Image Factory raw metal image for
+      # the schematic and version named by machine.install.image (which CABPT
+      # renders from the TalosConfig's imageFactory block), stamps KERNEL_ARGS
+      # into the UKI command lines and writes the network configuration to META.
+      # The action never talks to the Kubernetes API.
       #
       # HARDWARE is the whole Hardware object by JSON field names (.hardware),
       # including spec.userData and status.attributes.outOfBand, with the bulky
@@ -26,17 +26,12 @@ tasks:
         timeout: 9600
         namespaces:
           network: host
-        volumes:
-          - /var/lib/tink/shared:/shared
         environment:
           HARDWARE: {{ dict "metadata" (pick .hardware.metadata "name" "namespace" "labels" "annotations") "spec" .hardware.spec "status" (dig "status" (dict) .hardware) | toJson | quote }}
           # Deploy-level kernel arguments. talos.config points the node at
           # tootles for its machine configuration; net.ifnames=0 keeps kernel
           # interface names (eth0) and talos2disk infers META link naming from it.
           KERNEL_ARGS: "console=tty0 console=ttyAMA0,115200 net.ifnames=0 talos.config=__TOOTLES_USER_DATA_URL__"
-          # Kubeconfig provisioned on the OSIE host; needs get and patch on
-          # hardware.tinkerbell.org. Without it the write-back is skipped.
-          KUBECONFIG: /shared/kubeconfig
 
       # waitdaemon reports success to tink immediately, then respawns itself
       # to wait WAIT_SECONDS and finally runs IMAGE with this action's own

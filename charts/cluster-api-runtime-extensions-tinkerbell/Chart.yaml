@@ -2,7 +2,7 @@ apiVersion: v2
 name: cluster-api-runtime-extensions-tinkerbell
 description: Talos + Tinkerbell lifecycle glue for Cluster API - image-identity resolution onto Hardware, the mandatory Workflow-CREATE gate, the shipped install Template, machine teardown, hardware hygiene, and convergence-gated bootstrap-manifest sync.
 type: application
-version: 0.3.0
+version: 0.3.1
 appVersion: "0.1.0"
 home: https://github.com/tinkerbell-community/cluster-api-runtime-extensions-tinkerbell
 sources:
