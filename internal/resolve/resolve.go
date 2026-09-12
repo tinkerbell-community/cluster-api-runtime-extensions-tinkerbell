@@ -40,14 +40,6 @@ const (
 	// InstallerImageAnnotation publishes the upgrade-rendezvous installer reference; resolver-owned.
 	InstallerImageAnnotation = "talos.tinkerbell.org/installer-image"
 
-	// UserDataOwnerAnnotation is stamped by the talos2disk action together with the
-	// installer-image annotation and the rewritten userData. When present with
-	// UserDataOwnerTalos2disk, the action's installer-image value is authoritative: it names
-	// the schematic that was actually installed (detected extensions included).
-	UserDataOwnerAnnotation = "talos.tinkerbell.org/userdata-owner"
-	// UserDataOwnerTalos2disk is the UserDataOwnerAnnotation value talos2disk writes.
-	UserDataOwnerTalos2disk = "talos2disk"
-
 	// OwnerNameLabel / OwnerNamespaceLabel are CAPT's claim markers, set to the
 	// TinkerbellMachine's name/namespace at claim and removed at release.
 	OwnerNameLabel      = "v1alpha1.tinkerbell.org/ownerName"

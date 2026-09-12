@@ -147,15 +147,6 @@ func (r *Reconciler) resolve(ctx context.Context, tm *unstructured.Unstructured,
 		InstallerImage: InstallerImage(r.FactoryURL, id, version),
 		ContractPin:    newPin,
 	}
-
-	// Keep the installer image the install action recorded: re-asserting the same value
-	// keeps the resolver a co-owner of the annotation under server-side apply without
-	// changing it, so the upgrade path names the schematic that is actually on the disk.
-	if annotations := hw.GetAnnotations(); annotations[UserDataOwnerAnnotation] == UserDataOwnerTalos2disk {
-		if installed := annotations[InstallerImageAnnotation]; installed != "" {
-			plan.InstallerImage = installed
-		}
-	}
 	if !provisioned {
 		plan.OperatingSystem = &tinkv1.MetadataInstanceOperatingSystem{
 			Slug:     id,
